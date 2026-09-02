@@ -10,9 +10,9 @@ provider, supplied as a jar on the classpath rather than as a fork.
 For engine developers and QA. Part of
 [CUBRID Systems Research](https://github.com/cubrid-systems).
 
-> **Where it is:** both oracles run. NoREC executed 534,789 queries and TLP 718,341 at roughly
-> 2,000 queries/s, neither with a mismatch. The type and action surface is still narrow — see
-> [Status](#status).
+> **Where it is:** four oracles run — NoREC plus ternary partitioning on `WHERE`, `GROUP BY` and
+> `DISTINCT` — at roughly 2,000 queries/s, none with a mismatch so far. The type surface is still
+> narrow; see [Status](#status).
 
 ## Prerequisites
 
@@ -186,8 +186,12 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
 | schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
-| **NoREC oracle** | ✅ 534,789 queries, 91% statement success, no mismatch |
-| **TLP (`WHERE`) oracle** | ✅ 718,341 queries, 95% statement success, no mismatch |
+| **oracles** | `NOREC`, `WHERE`, `GROUP_BY`, `DISTINCT` — all four verified, no mismatch |
+| NoREC | ✅ 534,789 queries, 91% statement success |
+| TLP `WHERE` | ✅ 718,341 queries, 95% |
+| TLP `GROUP_BY` | ✅ 177,277 queries, 95% |
+| TLP `DISTINCT` | ✅ 174,309 queries, 96% |
+| oracles not wired | `HAVING`, `AGGREGATE` — an aggregate over grouped rows is not preserved by partitioning the input the way a group key is |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
@@ -209,10 +213,11 @@ cubrid-sqlancer/
     ├── CUBRIDOptions.java           --oracle, --test-database
     ├── CUBRIDSchema.java            catalog queries and the type model
     ├── CUBRIDErrors.java            errors that are expected rather than interesting
-    ├── CUBRIDOracleFactory.java     NOREC, WHERE
+    ├── CUBRIDOracleFactory.java     NOREC, WHERE, GROUP_BY, DISTINCT
     ├── CUBRIDToStringVisitor.java   CUBRID syntax, including LIMIT offset, count
     ├── ast/                         9 expression node types
-    └── gen/                         table, insert, update and expression generators
+    ├── gen/                         table, insert, update and expression generators
+    └── oracle/tlp/                  ternary partitioning: GROUP BY and DISTINCT
 ```
 
 ## Contributing
