@@ -1,6 +1,7 @@
 package sqlancer.cubrid;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -64,6 +65,26 @@ class CUBRIDTypeModelTest {
     void unknownNamesBecomeNull() {
         assertEquals(CUBRIDDataType.NULL, CUBRIDDataType.from(null));
         assertEquals(CUBRIDDataType.NULL, CUBRIDDataType.from("SET_OF(INTEGER)"));
+    }
+
+    // ------------------------------------------------------------ 숫자 판정
+
+    /**
+     * 집계 인자 선택과 연산자 선택이 이 판정을 공유한다. 숫자가 아닌 컬럼에 SUM 을 걸면
+     * {@code Cannot coerce ... to type double} 이고, MIN/MAX 를 정수 상수와 비교하면
+     * {@code Cannot coerce 0 to type date} 다.
+     */
+    @Test
+    void numericTypesAreTheOnesComparableToAnIntegerConstant() {
+        for (CUBRIDDataType type : new CUBRIDDataType[] { CUBRIDDataType.INTEGER, CUBRIDDataType.SMALLINT,
+                CUBRIDDataType.BIGINT, CUBRIDDataType.DOUBLE, CUBRIDDataType.FLOAT, CUBRIDDataType.NUMERIC }) {
+            assertTrue(type.isNumeric(), type + " 는 숫자여야 한다");
+        }
+        for (CUBRIDDataType type : new CUBRIDDataType[] { CUBRIDDataType.CHAR, CUBRIDDataType.VARCHAR,
+                CUBRIDDataType.DATE, CUBRIDDataType.TIME, CUBRIDDataType.DATETIME, CUBRIDDataType.BOOLEAN,
+                CUBRIDDataType.NULL }) {
+            assertFalse(type.isNumeric(), type + " 는 숫자가 아니어야 한다");
+        }
     }
 
     // ------------------------------------------------------------ 무작위 생성

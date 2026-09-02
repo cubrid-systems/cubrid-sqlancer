@@ -141,17 +141,7 @@ public final class CUBRIDExpressionGenerator
     }
 
     private static boolean isNumeric(CUBRIDDataType t) {
-        switch (t) {
-        case INTEGER:
-        case SMALLINT:
-        case BIGINT:
-        case DOUBLE:
-        case FLOAT:
-        case NUMERIC:
-            return true;
-        default:
-            return false;
-        }
+        return t.isNumeric();
     }
 
     @Override

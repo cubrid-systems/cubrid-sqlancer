@@ -11,6 +11,7 @@ import sqlancer.cubrid.gen.CUBRIDExpressionGenerator;
 import sqlancer.cubrid.oracle.tlp.CUBRIDTLPAggregateOracle;
 import sqlancer.cubrid.oracle.tlp.CUBRIDTLPDistinctOracle;
 import sqlancer.cubrid.oracle.tlp.CUBRIDTLPGroupByOracle;
+import sqlancer.cubrid.oracle.tlp.CUBRIDTLPHavingOracle;
 
 public enum CUBRIDOracleFactory implements OracleFactory<CUBRIDProvider.CUBRIDGlobalState> {
     WHERE {
@@ -48,6 +49,12 @@ public enum CUBRIDOracleFactory implements OracleFactory<CUBRIDProvider.CUBRIDGl
         @Override
         public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
             return new CUBRIDTLPAggregateOracle(globalState);
+        }
+    },
+    HAVING {
+        @Override
+        public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
+            return new CUBRIDTLPHavingOracle(globalState);
         }
     }
 }

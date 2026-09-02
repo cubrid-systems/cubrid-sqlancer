@@ -126,6 +126,21 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
         /** 상수 NULL 전용. */
         NULL;
 
+        /** 정수 상수와 비교할 수 있는 타입. 집계 인자와 연산자 선택이 이 판정을 공유한다. */
+        public boolean isNumeric() {
+            switch (this) {
+            case INTEGER:
+            case SMALLINT:
+            case BIGINT:
+            case DOUBLE:
+            case FLOAT:
+            case NUMERIC:
+                return true;
+            default:
+                return false;
+            }
+        }
+
         /** 컬럼으로 만들 수 있는 타입만. */
         public static CUBRIDDataType getRandomStorable() {
             CUBRIDDataType dt;
