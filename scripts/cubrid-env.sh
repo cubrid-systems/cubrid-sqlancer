@@ -29,7 +29,8 @@ usage() {
   cat <<'USAGE'
 사용법: cubrid-env.sh [옵션]
 
-  --source <dir>     원본 CUBRID 설치 경로 (기본: $CUBRID, 없으면 ~/cubrid/install.out)
+  --source <dir>     원본 CUBRID 설치 경로
+                     (기본: 기록된 원본 → $CUBRID → ~/cubrid/install.out)
   --root <dir>       격리 환경을 만들 경로   (기본: <repo>/.cubrid-env)
   --master-port <n>  cubrid_port_id          (기본: 1723)
   --broker-port <n>  BROKER_PORT             (기본: 34000)
@@ -53,11 +54,41 @@ while [ $# -gt 0 ]; do
 done
 
 die() { echo "error: $*" >&2; exit 1; }
+canon() { readlink -f "$1" 2>/dev/null || echo "$1"; }
+
+# 대상 엔진의 버전 문자열. 어떤 빌드를 테스트했는지는 결과에 반드시 붙어야 한다.
+engine_rel() {
+  CUBRID="$1" CUBRID_DATABASES="$1/databases" LD_LIBRARY_PATH="$1/lib" \
+    "$1/bin/cubrid_rel" 2>/dev/null | sed -n 's/^CUBRID /CUBRID /p' | head -1
+}
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-[ -n "$ROOT" ]   || ROOT="$REPO/.cubrid-env"
-[ -n "$SOURCE" ] || SOURCE="${CUBRID:-$HOME/cubrid/install.out}"
+[ -n "$ROOT" ] || ROOT="$REPO/.cubrid-env"
+
+# 이미 만들어진 환경에 기록된 원본. bin/lib 심링크는 생성 시점에 굳으므로
+# 이 값이 실제로 테스트되는 트리다. 옛 환경은 .ready 가 비어 있어 심링크로 역추적한다.
+RECORDED=""
+if [ -f "$ROOT/.ready" ]; then
+  RECORDED="$(sed -n 's/^source=//p' "$ROOT/.ready")"
+  [ -n "$RECORDED" ] || RECORDED="$(canon "$ROOT/bin" | sed 's|/bin$||')"
+fi
+
+# --source 가 최우선. 그 다음이 $CUBRID — 단, 이미 격리 환경을 eval 한 셸에서는
+# $CUBRID 가 격리 환경 자신을 가리키므로 그때는 기록된 원본을 쓴다.
+if [ -z "$SOURCE" ]; then
+  if [ -n "${CUBRID:-}" ] && [ "$(canon "$CUBRID")" != "$(canon "$ROOT")" ]; then
+    SOURCE="$CUBRID"
+  else
+    SOURCE="${RECORDED:-$HOME/cubrid/install.out}"
+  fi
+fi
 [ -x "$SOURCE/bin/cubrid" ] || die "원본 CUBRID 설치가 아니다: $SOURCE"
+
+# 대상이 바뀌었는데 환경을 재사용하면 조용히 옛 트리를 계속 테스트한다.
+if [ -n "$RECORDED" ] && [ "$(canon "$SOURCE")" != "$(canon "$RECORDED")" ]; then
+  die "격리 환경은 $RECORDED 로 만들어져 있다 — bin/lib 심링크가 그 트리에 굳어 있어
+       $SOURCE 는 테스트되지 않는다. 대상을 바꾸려면 '$ROOT' 를 지우고 다시 만들 것."
+fi
 
 if [ ! -f "$ROOT/.ready" ]; then
   echo "==> 격리 환경 생성: $ROOT (원본: $SOURCE)" >&2
@@ -91,9 +122,25 @@ if [ ! -f "$ROOT/.ready" ]; then
   ' "$ROOT/conf/cubrid_broker.conf" > "$ROOT/conf/cubrid_broker.conf.new"
   mv "$ROOT/conf/cubrid_broker.conf.new" "$ROOT/conf/cubrid_broker.conf"
 
-  touch "$ROOT/.ready"
+  {
+    echo "source=$SOURCE"
+    echo "rel=$(engine_rel "$SOURCE")"
+    echo "created=$(date -Is)"
+  } > "$ROOT/.ready"
   echo "==> 완료. master=$MASTER_PORT broker=$BROKER_PORT shm=$SHM_BASE" >&2
 fi
+
+# 옛 환경(0바이트 .ready)을 만나면 기록을 채워 넣는다.
+if [ ! -s "$ROOT/.ready" ]; then
+  {
+    echo "source=$RECORDED"
+    echo "rel=$(engine_rel "$RECORDED")"
+    echo "created=unknown"
+  } > "$ROOT/.ready"
+fi
+
+echo "==> 대상 엔진: $(sed -n 's/^rel=//p' "$ROOT/.ready")" >&2
+echo "    원본: $(sed -n 's/^source=//p' "$ROOT/.ready")" >&2
 
 if [ "$PRINT_ENV" = "yes" ]; then
   echo "export CUBRID='$ROOT'"
