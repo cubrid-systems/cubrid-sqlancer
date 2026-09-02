@@ -104,8 +104,24 @@ else
 fi
 
 # 코어 크기 제한은 서버 프로세스를 fork 하기 *전에* 걸어야 한다.
+#
+# ⚠️ 셸에 ulimit 을 거는 것만으로는 부족하다. 서버가 크래시하면 **cub_master 가
+#    서버를 재기동**하는데, 그때 자식은 셸이 아니라 *master 의* limit 을 상속한다.
+#    master 가 unlimited 로 떠 있으면 재기동된 서버가 다시 10~20GB 코어를 남긴다.
+#    따라서 master 자체를 제한된 limit 으로 (재)기동해야 한다.
 if [ "$CORE_DUMP" = "off" ]; then
   ulimit -c 0
+  if pgrep -f "cub_master" >/dev/null 2>&1; then
+    mpid=$(pgrep -f "cub_master" | head -1)
+    mlimit=$(awk '/Max core file size/{print $6}' "/proc/$mpid/limits" 2>/dev/null)
+    if [ "$mlimit" != "0" ]; then
+      echo "==> cub_master 가 코어 unlimited 로 떠 있다 — 재기동해 제한을 상속시킨다"
+      cubrid service stop >/dev/null 2>&1 || true
+      sleep 2
+      ( ulimit -c 0; cubrid master start >/dev/null 2>&1 || cubrid service start >/dev/null 2>&1 ) &
+      sleep 5
+    fi
+  fi
   echo "==> 코어 파일 비활성 (스택 정보는 \$CUBRID/log/coredump 에 남는다)"
 else
   ulimit -c unlimited
