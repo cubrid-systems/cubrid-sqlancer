@@ -193,7 +193,7 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | TLP `DISTINCT` | ✅ 174,309 queries, 96% |
 | TLP `AGGREGATE` | ✅ runs; re-aggregates the pieces with MIN, MAX, SUM and COUNT |
 | oracles not wired | `HAVING` — it partitions groups rather than rows, which is a third equation |
-| findings | `docs/findings/` — two wrong results in outer joins, reproduced by hand, plus one open lead |
+| findings | `docs/findings/` — three wrong results, each with a hand-checked reproduction |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
 | actions not covered | `ALTER TABLE` |
