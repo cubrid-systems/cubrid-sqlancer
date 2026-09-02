@@ -8,6 +8,8 @@ import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.cubrid.gen.CUBRIDExpressionGenerator;
+import sqlancer.cubrid.oracle.tlp.CUBRIDTLPDistinctOracle;
+import sqlancer.cubrid.oracle.tlp.CUBRIDTLPGroupByOracle;
 
 public enum CUBRIDOracleFactory implements OracleFactory<CUBRIDProvider.CUBRIDGlobalState> {
     WHERE {
@@ -27,6 +29,18 @@ public enum CUBRIDOracleFactory implements OracleFactory<CUBRIDProvider.CUBRIDGl
             CUBRIDExpressionGenerator gen = new CUBRIDExpressionGenerator(globalState);
             ExpectedErrors errors = ExpectedErrors.newErrors().with(CUBRIDErrors.getExpressionErrors()).build();
             return new NoRECOracle<>(globalState, gen, errors);
+        }
+    },
+    GROUP_BY {
+        @Override
+        public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
+            return new CUBRIDTLPGroupByOracle(globalState);
+        }
+    },
+    DISTINCT {
+        @Override
+        public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
+            return new CUBRIDTLPDistinctOracle(globalState);
         }
     }
 }
