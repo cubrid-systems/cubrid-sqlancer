@@ -10,8 +10,9 @@ provider, supplied as a jar on the classpath rather than as a fork.
 For engine developers and QA. Part of
 [CUBRID Systems Research](https://github.com/cubrid-systems).
 
-> **Where it is:** both oracles run. NoREC executed 91,513 queries at ~1,100 q/s and TLP 90,938,
-> neither with a mismatch. The type and action surface is still narrow — see [Status](#status).
+> **Where it is:** both oracles run. NoREC executed 534,789 queries and TLP 718,341 at roughly
+> 2,000 queries/s, neither with a mismatch. The type and action surface is still narrow — see
+> [Status](#status).
 
 ## Prerequisites
 
@@ -185,11 +186,10 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
 | schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
-| **NoREC oracle** | ✅ 91,513 queries at ~1,100 q/s, no mismatch |
-| **TLP (`WHERE`) oracle** | ✅ 90,938 queries, 95% statement success, no mismatch |
+| **NoREC oracle** | ✅ 534,789 queries, 91% statement success, no mismatch |
+| **TLP (`WHERE`) oracle** | ✅ 718,341 queries, 95% statement success, no mismatch |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
-| known generator gap | a `BOOLEAN` constant can come out as a bare `NULL`, which CUBRID rejects as a predicate — it needs the `(1 = NULL)` form, the identity-comparison convention the `TRUE`/`FALSE` constants already follow |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
 | concurrency | ❌ single-threaded by construction |
 
