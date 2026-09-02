@@ -8,6 +8,7 @@ import sqlancer.common.oracle.TLPWhereOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.cubrid.gen.CUBRIDExpressionGenerator;
+import sqlancer.cubrid.oracle.tlp.CUBRIDTLPAggregateOracle;
 import sqlancer.cubrid.oracle.tlp.CUBRIDTLPDistinctOracle;
 import sqlancer.cubrid.oracle.tlp.CUBRIDTLPGroupByOracle;
 
@@ -41,6 +42,12 @@ public enum CUBRIDOracleFactory implements OracleFactory<CUBRIDProvider.CUBRIDGl
         @Override
         public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
             return new CUBRIDTLPDistinctOracle(globalState);
+        }
+    },
+    AGGREGATE {
+        @Override
+        public TestOracle<CUBRIDProvider.CUBRIDGlobalState> create(CUBRIDProvider.CUBRIDGlobalState globalState) {
+            return new CUBRIDTLPAggregateOracle(globalState);
         }
     }
 }
