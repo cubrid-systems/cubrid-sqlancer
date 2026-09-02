@@ -39,6 +39,13 @@ public final class CUBRIDErrors {
         errors.add("data overflow");
         errors.add("Overflow occurred");
 
+        // 엔진 결함 — UNION 분기의 술어가 컴파일 타임 상수 false 면 (그래서 그 분기가 확실히 비면)
+        // 드라이버가 유효한 SELECT 를 질의가 아니라고 거부한다. 최소 재현:
+        //   SELECT a FROM t WHERE 1=0 UNION SELECT a FROM t WHERE 1=0
+        // 조인과는 무관하고 UNION ALL 에서도 난다. 문구를 그대로 넣는다 — 이보다 좁힐 수 없고,
+        // 이 문구가 wrong-result 를 감출 여지도 없다.
+        errors.add("The query is not applicable to the executeQuery()");
+
         // 문자열/날짜
         errors.add("Conversion error");
         errors.add("date/time conversion");
