@@ -260,34 +260,32 @@ public final class CUBRIDExpressionGenerator
         return new CUBRIDSelect();
     }
 
+    /**
+     * 조인을 체인으로 잇는다. 기준 테이블은 {@code tables} 에 남겨 {@code FROM} 목록이 되게 하고, 오른쪽 테이블만 하나씩 떼어 붙인다 —
+     * 예전 구조는 반복마다 테이블을 두 개씩 소비해서 조인 두 개짜리 질의가 사실상 나오지 않았다.
+     *
+     * <p>
+     * {@code ON} 조건이 볼 수 있는 컬럼은 기준 테이블부터 지금까지 붙인 테이블까지다. 아직 붙지 않은 테이블의 컬럼을 참조하면 CUBRID 가
+     * 거부한다.
+     */
     @Override
     public List<CUBRIDJoin> getRandomJoinClauses() {
         List<CUBRIDJoin> joinExpressions = new ArrayList<>();
-        while (tables.size() >= 2 && Randomly.getBooleanWithRatherLowProbability()) {
-            CUBRIDTable leftTable = tables.remove(0);
-            CUBRIDTable rightTable = tables.remove(0);
-            List<CUBRIDColumn> joinColumns = new ArrayList<>(leftTable.getColumns());
-            joinColumns.addAll(rightTable.getColumns());
-            CUBRIDExpressionGenerator joinGen = new CUBRIDExpressionGenerator(globalState).setColumns(joinColumns);
-            CUBRIDTableReference left = new CUBRIDTableReference(leftTable);
-            CUBRIDTableReference right = new CUBRIDTableReference(rightTable);
-            CUBRIDExpression onCondition = joinGen
-                    .generateExpression(CUBRIDCompositeDataType.getRandomWithType(CUBRIDDataType.BOOLEAN));
-            switch (CUBRIDJoin.JoinType.getRandom()) {
-            case INNER:
-                joinExpressions.add(CUBRIDJoin.createInnerJoin(left, right, onCondition));
-                break;
-            case LEFT:
-                joinExpressions.add(CUBRIDJoin.createLeftOuterJoin(left, right, onCondition));
-                break;
-            case RIGHT:
-                joinExpressions.add(CUBRIDJoin.createRightOuterJoin(left, right, onCondition));
-                break;
-            default:
-                // CUBRID 는 NATURAL JOIN 을 지원하지만 컬럼명 우연 일치에 의존해 노이즈가 크다. 1차에서는 제외.
-                joinExpressions.add(CUBRIDJoin.createInnerJoin(left, right, onCondition));
-                break;
+        if (tables.size() < 2) {
+            return joinExpressions;
+        }
+        List<CUBRIDColumn> scope = new ArrayList<>(tables.get(0).getColumns());
+        while (tables.size() > 1 && Randomly.getBoolean()) {
+            CUBRIDTable rightTable = tables.remove(1);
+            scope.addAll(rightTable.getColumns());
+            CUBRIDJoin.JoinType joinType = CUBRIDJoin.JoinType.getRandom();
+            CUBRIDExpression onCondition = null;
+            if (joinType != CUBRIDJoin.JoinType.CROSS) {
+                // CROSS JOIN 은 ON 을 받지 않는다.
+                onCondition = new CUBRIDExpressionGenerator(globalState).setColumns(new ArrayList<>(scope))
+                        .generateExpression(CUBRIDCompositeDataType.getRandomWithType(CUBRIDDataType.BOOLEAN));
             }
+            joinExpressions.add(new CUBRIDJoin(new CUBRIDTableReference(rightTable), joinType, onCondition));
         }
         return joinExpressions;
     }

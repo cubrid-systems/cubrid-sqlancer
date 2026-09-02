@@ -34,13 +34,8 @@ public class CUBRIDToStringVisitor extends NewToStringVisitor<CUBRIDExpression> 
     }
 
     private void visit(CUBRIDJoin join) {
-        visit((CUBRIDExpression) join.getLeftTable());
         sb.append(" ");
-        sb.append(join.getJoinType());
-        sb.append(" ");
-        if (join.getOuterType() != null) {
-            sb.append(join.getOuterType());
-        }
+        sb.append(join.getJoinType().getTextRepresentation());
         sb.append(" JOIN ");
         visit((CUBRIDExpression) join.getRightTable());
         if (join.getOnCondition() != null) {
@@ -84,11 +79,9 @@ public class CUBRIDToStringVisitor extends NewToStringVisitor<CUBRIDExpression> 
         visit(select.getFetchColumns());
         sb.append(" FROM ");
         visit(select.getFromList());
-        if (!select.getFromList().isEmpty() && !select.getJoinList().isEmpty()) {
-            sb.append(", ");
-        }
-        if (!select.getJoinList().isEmpty()) {
-            visit(select.getJoinList());
+        // 조인은 앞의 것에 이어 붙는다. 쉼표로 나열하면 체인이 아니라 교차곱이 된다.
+        for (CUBRIDExpression join : select.getJoinList()) {
+            visit(join);
         }
         if (select.getWhereClause() != null) {
             sb.append(" WHERE ");

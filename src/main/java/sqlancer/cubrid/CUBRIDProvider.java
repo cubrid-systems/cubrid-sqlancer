@@ -141,7 +141,9 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
 
     @Override
     public void generateDatabase(CUBRIDGlobalState globalState) throws Exception {
-        for (int i = 0; i < Randomly.fromOptions(1, 2); i++) {
+        // 조인은 테이블이 2개 이상일 때만 만들어진다. 1개짜리 DB 에서는 조인이 원리적으로 불가능해
+        // 옵티마이저가 고를 조인 순서도, 그것을 틀릴 여지도 없다.
+        for (int i = 0; i < Randomly.fromOptions(2, 3, 4); i++) {
             boolean success;
             int attempts = 0;
             do {
