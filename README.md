@@ -1,4 +1,4 @@
-![cubrid-sqlancer — goal: find the wrong-result bugs in CUBRID that an expected-answer suite structurally cannot reach. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.](docs/assets/banner.svg)
+![cubrid-sqlancer — goal: find wrong-result bugs in CUBRID without knowing the right answer in advance. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.](docs/assets/banner.svg)
 
 **cubrid-sqlancer** is a [SQLancer](https://github.com/sqlancer/sqlancer) provider for CUBRID.
 It looks for **wrong-result bugs** — the kind where the engine returns an answer that is simply
@@ -69,12 +69,13 @@ see the note about fat jars in [Architecture](#architecture).
 
 ## Why it exists
 
-`cubrid-testkit` (and CTP before it) compares query output against a stored `.answer` file. That
-finds regressions in cases somebody already wrote down. It cannot find a wrong result in a query
-nobody has ever written, because there is nothing to compare against.
+A wrong result is the failure mode that hides best. The engine returns rows, the driver accepts
+them, and nothing reports an error — the answer is simply not the right one, and nothing in the
+system is in a position to say so.
 
-NoREC gets around this by not needing an expected answer at all. It builds two queries that must
-count the same rows, and lets the optimizer rewrite only one of them:
+So the goal is to find those without knowing the right answer. NoREC does it by building two
+queries from one predicate that must count the same rows, and letting the optimizer rewrite only
+one of them:
 
 ```sql
 -- optimized: the optimizer is free to rewrite the predicate
@@ -87,7 +88,8 @@ SELECT SUM(norec_count) FROM (
 ```
 
 Two different counts mean the optimizer rewrote the predicate into something that does not mean the
-same thing. That is a wrong-result bug, and it is an axis `cubrid-testkit` has no coverage on today.
+same thing. That is a wrong-result bug, and the pair proves it without either query having been
+told what the answer should be.
 
 ## Architecture
 
@@ -213,38 +215,6 @@ cubrid-sqlancer/
     └── gen/                         table, insert, update and expression generators
 ```
 
-## Pitfalls
-
-Every one of these cost time here.
-
-| What you see | What it is | What to do |
-|---|---|---|
-| `Syntax error: unexpected ')', expecting '('` | `count` is a reserved word | alias it `norec_count` |
-| `cubrid server status` shows databases you did not create, and yours vanishes | another install tree's master owns port 1523 | `scripts/cubrid-env.sh` |
-| `config error, MASTER_SHM_ID = broker <name> APPL_SERVER_SHM_ID` | the master shm id collides with a broker's | keep them apart (default is +99) |
-| `cubrid server start` cannot find a database you just created | `CUBRID_DATABASES` was unset, so `createdb` wrote its own `databases.txt` into the current directory | the scripts always export it |
-| the disk fills in minutes | one 10–20 GB core per crash | `--core-dump off`, the default |
-| cores appear even with `--core-dump off` | `cub_master` restarted the server, and it inherited the master's limit | restart the master under the limit — the script does this |
-| `*.coredump` is zero bytes | the crash handler opened the file but wrote no backtrace | read the other files in that directory — not every crash writes one |
-| `cubrid broker start` never returns | debug-build behaviour | check the port instead: `ss -ltnp` |
-| `cubrid` missing from `--help` | `META-INF/services` was shaded away | do not build a fat jar |
-| `UnsupportedClassVersionError ... class file version 55.0` | the `java` on `PATH` is 8 | invoke a JDK 11+ explicitly — sourcing the CUBRID environment does not change `java` |
-| `Failed to load libjvm from 'CUBRID_JAVA_HOME'` | the isolated environment did not link `vm/`, where the PL server finds the bundled JVM | recreate it — `cubrid-env.sh` links it now |
-
-## Relationships
-
-[`cubrid-testkit`](https://github.com/cubrid-systems/cubrid-testkit) carries this repository as a
-submodule. The decision record is `docs/adr/ADR-EXT-003-sqlancer-cubrid.md` there.
-
-For now this is a standalone tool. Integration waits for Phase 2 of testkit, which is where the
-case-format ingestion interface gets defined; the shape it will take is already settled — a
-subprocess and an artifact to ingest, not a library call. Dialect knowledge is shared as *data*, a
-catalog file, rather than as code, because the other tools on this axis (SQLsmith in C++,
-sqllogictest in Rust) cannot share provider code with a Java one.
-
-Mismatch and regression corpora do not go into `cubrid-testcases*`. Those repositories are frozen
-input (testkit NG1).
-
 ## Contributing
 
 `main` is the only branch. Changes arrive as a branch and a pull request.
@@ -253,22 +223,3 @@ CI on every push and pull request builds SQLancer from source, builds the provid
 the two things that fail silently rather than loudly: that `@AutoService` wrote
 `META-INF/services/sqlancer.DatabaseProvider`, and that `sqlancer.Main --help` actually lists
 `cubrid`. A provider that compiles but is never discovered looks exactly like a healthy run.
-
-When `main` moves, a bot opens a pull request against `cubrid-testkit` advancing the submodule
-pointer, with the intervening commits in the body. It is driven three ways so a lost webhook does not
-mean a stale pointer: a `repository_dispatch` from here for immediacy, a manual trigger, and a daily
-schedule that catches up regardless.
-
-Two secrets make that work. Both repositories are private, so `GITHUB_TOKEN` is not enough — it is
-scoped to one repository and cannot read a sibling.
-
-| Secret | Where | Scope |
-|---|---|---|
-| `TESTKIT_DISPATCH_TOKEN` | this repository | send `repository_dispatch` to `cubrid-systems/cubrid-testkit` |
-| `SUBMODULE_PAT` | `cubrid-testkit` | read this repository, write contents and pull requests on `cubrid-testkit` |
-
-Until they exist the bot fails and nothing else does; the daily job will pick things up the moment
-they are added.
-
-When you add to `CUBRIDErrors`, prefer the most specific string you can. A broad prefix silences real
-bugs, and the list already carries `Semantic:`, which is about as wide as it should ever get.

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="cubrid-sqlancer — goal: find the wrong-result bugs in CUBRID that an expected-answer suite structurally cannot reach. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="cubrid-sqlancer — goal: find wrong-result bugs in CUBRID without knowing the right answer in advance. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.">
 <style>
   .name{font-size:36px;font-weight:700;fill:#f8fafc;letter-spacing:-0.5px}
   .tag{font-size:13.5px;fill:#94a3b8}
@@ -14,7 +14,7 @@
 <rect x="0" y="0" width="6" height="200" fill="#2563eb"/>
 
 <text class="name" x="40" y="76">cubrid-sqlancer</text>
-<text class="tag"  x="41" y="104">Find the wrong-result bugs an expected-answer suite structurally cannot reach.</text>
+<text class="tag"  x="41" y="104">Find wrong-result bugs in CUBRID without knowing the right answer in advance.</text>
 <text class="tag"  x="41" y="123">Two queries must count the same thing — the optimizer only gets to rewrite one.</text>
 <text class="meta" x="41" y="158">FOR ENGINE DEVELOPERS AND QA · CUBRID SYSTEMS RESEARCH</text>
 
