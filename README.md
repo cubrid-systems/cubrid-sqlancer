@@ -197,6 +197,7 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
+| unit tests | ✅ 17, on the SQL rendering and the type model — `mvn test` |
 | concurrency | ❌ single-threaded by construction |
 
 ## Layout
@@ -211,6 +212,7 @@ cubrid-sqlancer/
 │   ├── cubrid-env.sh                an isolated CUBRID_HOME with its own ports and shm ids
 │   ├── cubrid-testdb.sh             create / reuse / recreate the test database; core-file policy
 │   └── crash-repro.sh               replay a run by seed, over JDBC, to reproduce a crash
+├── src/test/java/sqlancer/cubrid/    rendering and type-model tests
 └── src/main/java/sqlancer/cubrid/
     ├── CUBRIDProvider.java          @AutoService entry point; empties the prepared database
     ├── CUBRIDOptions.java           --oracle, --test-database
