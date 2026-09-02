@@ -10,8 +10,8 @@ provider, supplied as a jar on the classpath rather than as a fork.
 For engine developers and QA. Part of
 [CUBRID Systems Research](https://github.com/cubrid-systems).
 
-> **Where it is:** the provider runs. One session executed 37,373 queries at 543 q/s under the NoREC
-> oracle with no mismatch. The type and action surface is still narrow — see [Status](#status).
+> **Where it is:** both oracles run. NoREC executed 91,513 queries at ~1,100 q/s and TLP 90,938,
+> neither with a mismatch. The type and action surface is still narrow — see [Status](#status).
 
 ## Prerequisites
 
@@ -183,10 +183,11 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
 | schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
-| **NoREC oracle** | ✅ 37,373 queries at 543 q/s, no mismatch |
-| TLP (`WHERE`) oracle | ⚠️ wired, not yet run |
+| **NoREC oracle** | ✅ 91,513 queries at ~1,100 q/s, no mismatch |
+| **TLP (`WHERE`) oracle** | ✅ 90,938 queries, 95% statement success, no mismatch |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
+| known generator gap | a `BOOLEAN` constant can come out as a bare `NULL`, which CUBRID rejects as a predicate — it needs the `(1 = NULL)` form, the identity-comparison convention the `TRUE`/`FALSE` constants already follow |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
 | concurrency | ❌ single-threaded by construction |
 
@@ -227,6 +228,8 @@ Every one of these cost time here.
 | `*.coredump` is zero bytes | the crash handler opened the file but wrote no backtrace | read the other files in that directory — not every crash writes one |
 | `cubrid broker start` never returns | debug-build behaviour | check the port instead: `ss -ltnp` |
 | `cubrid` missing from `--help` | `META-INF/services` was shaded away | do not build a fat jar |
+| `UnsupportedClassVersionError ... class file version 55.0` | the `java` on `PATH` is 8 | invoke a JDK 11+ explicitly — sourcing the CUBRID environment does not change `java` |
+| `Failed to load libjvm from 'CUBRID_JAVA_HOME'` | the isolated environment did not link `vm/`, where the PL server finds the bundled JVM | recreate it — `cubrid-env.sh` links it now |
 
 ## Relationships
 
