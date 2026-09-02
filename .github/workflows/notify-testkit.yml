@@ -20,6 +20,10 @@ jobs:
           GH_TOKEN: ${{ secrets.TESTKIT_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secret TESTKIT_DISPATCH_TOKEN 이 없다 — cubrid-testkit 에 contents 쓰기 권한을 가진 PAT 를 이 저장소 secret 으로 등록하라. 등록 전까지는 testkit 쪽 워크플로의 일일 schedule 이 따라잡는다."
+            exit 1
+          fi
           gh api repos/cubrid-systems/cubrid-testkit/dispatches \
             -f event_type=sqlancer-updated \
             -F client_payload[sha]="${GITHUB_SHA}" \
