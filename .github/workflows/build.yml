@@ -39,8 +39,8 @@ jobs:
           mvn -q -B install:install-file -Dfile=/tmp/stub/cubrid-jdbc.jar \
             -DgroupId=cubrid -DartifactId=cubrid-jdbc -Dversion=11.5.0 -Dpackaging=jar
 
-      - name: Build provider
-        run: mvn -B package -DskipTests
+      - name: Build provider and run unit tests
+        run: mvn -B package
 
       - name: Assert the provider registers with ServiceLoader
         run: |

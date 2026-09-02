@@ -17,6 +17,7 @@
     <sqlancer.version>2.0.0</sqlancer.version>
     <cubrid.jdbc.version>11.5.0</cubrid.jdbc.version>
     <auto-service.version>1.1.1</auto-service.version>
+    <junit.version>5.11.2</junit.version>
   </properties>
 
   <dependencies>
@@ -45,10 +46,26 @@
       <version>${auto-service.version}</version>
       <optional>true</optional>
     </dependency>
+
+    <!--
+      단위 테스트. 엔진 없이 검증할 수 있는 것만 다룬다 — SQL 표기와 타입 모델이다.
+      이 두 곳에서 조용한 회귀가 실제로 두 번 났다 (맨 NULL 술어, JOIN 의 이중 공백).
+    -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
