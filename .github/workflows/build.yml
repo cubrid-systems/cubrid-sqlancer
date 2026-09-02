@@ -1,0 +1,60 @@
+# provider 가 컴파일되고 ServiceLoader 에 등록되는지만 본다.
+# 실제 실행은 CUBRID 인스턴스가 필요하므로 CI 범위 밖이다.
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build SQLancer from source
+        run: |
+          set -euo pipefail
+          # Maven Central 의 2.0.0 은 2022-01 게시본이라 NoRECGenerator / NoRECOracle /
+          # Reproducer 가 없다. 반드시 소스에서 빌드해야 한다.
+          git clone --depth 1 https://github.com/sqlancer/sqlancer.git ../sqlancer-upstream
+          cd ../sqlancer-upstream
+          mvn -q -B install -DskipTests \
+            -Dspotless.check.skip=true -Dspotless.apply.skip=true \
+            -Dcheckstyle.skip=true -Dpmd.skip=true -Dspotbugs.skip=true -Djacoco.skip=true
+
+      - name: Stub the CUBRID JDBC driver
+        run: |
+          set -euo pipefail
+          # 드라이버는 CUBRID 설치 트리에만 있고 Maven Central 에 없다. 컴파일에는
+          # 클래스 참조가 필요 없으므로(리플렉션으로만 로드) 빈 jar 로 좌표만 채운다.
+          mkdir -p /tmp/stub && (cd /tmp/stub && jar cf cubrid-jdbc.jar -C . .)
+          mvn -q -B install:install-file -Dfile=/tmp/stub/cubrid-jdbc.jar \
+            -DgroupId=cubrid -DartifactId=cubrid-jdbc -Dversion=11.5.0 -Dpackaging=jar
+
+      - name: Build provider
+        run: mvn -B package -DskipTests
+
+      - name: Assert the provider registers with ServiceLoader
+        run: |
+          set -euo pipefail
+          f=target/classes/META-INF/services/sqlancer.DatabaseProvider
+          test -f "$f" || { echo "::error::$f 이 생성되지 않았다 (@AutoService 확인)"; exit 1; }
+          grep -qx 'sqlancer.cubrid.CUBRIDProvider' "$f" \
+            || { echo "::error::provider 가 등록되지 않았다:"; cat "$f"; exit 1; }
+          echo "registered: $(cat "$f")"
+
+      - name: Assert SQLancer discovers the cubrid command
+        run: |
+          set -euo pipefail
+          out="$(java -cp "target/classes:target/deps/*" sqlancer.Main --help 2>&1 || true)"
+          echo "$out" | grep -q '^\s*cubrid' \
+            || { echo "::error::sqlancer.Main --help 에 cubrid 가 없다"; echo "$out" | head -40; exit 1; }
+          echo "sqlancer.Main lists: cubrid"

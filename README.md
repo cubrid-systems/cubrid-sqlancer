@@ -258,8 +258,28 @@ input (testkit NG1).
 
 ## Contributing
 
-`main` is the only branch. Changes arrive as a branch and a pull request. When `main` moves, a bot
-opens a pull request against `cubrid-testkit` to advance the submodule pointer.
+`main` is the only branch. Changes arrive as a branch and a pull request.
+
+CI on every push and pull request builds SQLancer from source, builds the provider, and then asserts
+the two things that fail silently rather than loudly: that `@AutoService` wrote
+`META-INF/services/sqlancer.DatabaseProvider`, and that `sqlancer.Main --help` actually lists
+`cubrid`. A provider that compiles but is never discovered looks exactly like a healthy run.
+
+When `main` moves, a bot opens a pull request against `cubrid-testkit` advancing the submodule
+pointer, with the intervening commits in the body. It is driven three ways so a lost webhook does not
+mean a stale pointer: a `repository_dispatch` from here for immediacy, a manual trigger, and a daily
+schedule that catches up regardless.
+
+Two secrets make that work. Both repositories are private, so `GITHUB_TOKEN` is not enough — it is
+scoped to one repository and cannot read a sibling.
+
+| Secret | Where | Scope |
+|---|---|---|
+| `TESTKIT_DISPATCH_TOKEN` | this repository | send `repository_dispatch` to `cubrid-systems/cubrid-testkit` |
+| `SUBMODULE_PAT` | `cubrid-testkit` | read this repository, write contents and pull requests on `cubrid-testkit` |
+
+Until they exist the bot fails and nothing else does; the daily job will pick things up the moment
+they are added.
 
 When you add to `CUBRIDErrors`, prefer the most specific string you can. A broad prefix silences real
 bugs, and the list already carries `Semantic:`, which is about as wide as it should ever get.

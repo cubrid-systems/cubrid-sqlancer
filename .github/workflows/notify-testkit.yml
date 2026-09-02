@@ -1,0 +1,27 @@
+# main 이 움직이면 cubrid-testkit 에 신호를 보내, 그쪽에서 submodule 포인터를 올리는
+# PR 이 열리게 한다.
+#
+# 필요한 secret: TESTKIT_DISPATCH_TOKEN
+#   scope: cubrid-systems/cubrid-testkit 에 대한 contents 쓰기 (repository_dispatch 권한)
+#
+# 이 신호가 유실돼도 testkit 쪽 워크플로가 하루 한 번 스스로 따라잡는다.
+name: Notify cubrid-testkit
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tell cubrid-testkit that main moved
+        env:
+          GH_TOKEN: ${{ secrets.TESTKIT_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api repos/cubrid-systems/cubrid-testkit/dispatches \
+            -f event_type=sqlancer-updated \
+            -F client_payload[sha]="${GITHUB_SHA}" \
+            -F client_payload[ref]="${GITHUB_REF}"
+          echo "dispatched: ${GITHUB_SHA}"
