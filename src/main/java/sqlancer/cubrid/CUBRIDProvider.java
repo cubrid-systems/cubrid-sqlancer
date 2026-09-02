@@ -21,6 +21,7 @@ import sqlancer.SQLProviderAdapter;
 import sqlancer.StatementExecutor;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
+import sqlancer.cubrid.gen.CUBRIDAlterTableGenerator;
 import sqlancer.cubrid.gen.CUBRIDDeleteGenerator;
 import sqlancer.cubrid.gen.CUBRIDIndexGenerator;
 import sqlancer.cubrid.gen.CUBRIDInsertGenerator;
@@ -62,7 +63,12 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
         /**
          * 뷰는 옵티마이저에 병합이냐 물리화냐를 판단하게 만든다. 지금까지 찾은 결함이 모두 재작성 계열이라 같은 지점을 다른 각도에서 누른다.
          */
-        CREATE_VIEW(CUBRIDViewGenerator::getQuery);
+        CREATE_VIEW(CUBRIDViewGenerator::getQuery),
+        /**
+         * ADD COLUMN 은 기존 행에 NULL 을 채운다. 값이 있는 테이블 안의 NULL 컬럼에 인덱스가 붙는 상태가 만들어지고, 기록된 세 번째 결함이
+         * 사는 자리가 그곳이다.
+         */
+        ALTER_TABLE(CUBRIDAlterTableGenerator::getQuery);
 
         private final SQLQueryProvider<CUBRIDGlobalState> sqlQueryProvider;
 
@@ -184,6 +190,8 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
             return r.getInteger(0, 5);
         case CREATE_VIEW:
             return r.getInteger(0, 2);
+        case ALTER_TABLE:
+            return r.getInteger(0, 3);
         default:
             throw new AssertionError(a);
         }
