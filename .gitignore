@@ -1,0 +1,9 @@
+target/
+logs/
+*.class
+# 격리 CUBRID 실행 환경 (심볼릭 링크 + DB 볼륨) — 재생성 가능
+.cubrid-env/
+# 운영 아티팩트
+.omc/
+csql.err
+csql.access

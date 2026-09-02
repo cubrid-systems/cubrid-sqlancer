@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.cubrid.qa</groupId>
+  <artifactId>cubrid-sqlancer</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>CUBRID SQLancer Provider</name>
+  <description>SQLancer DatabaseProvider for CUBRID, discovered via ServiceLoader</description>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Bootstrap 으로 로컬 설치된 좌표. scripts/bootstrap.sh 참조 -->
+    <sqlancer.version>2.0.0</sqlancer.version>
+    <cubrid.jdbc.version>11.5.0</cubrid.jdbc.version>
+    <auto-service.version>1.1.1</auto-service.version>
+  </properties>
+
+  <dependencies>
+    <!--
+      SQLancer 본체. Maven Central 의 com.sqlancer:sqlancer:2.0.0 은 2022-01 게시본이라
+      NoRECGenerator / NoRECOracle / Reproducer 가 없다. 반드시 소스에서 빌드해
+      로컬 저장소에 설치해야 한다 (scripts/bootstrap.sh).
+    -->
+    <dependency>
+      <groupId>com.sqlancer</groupId>
+      <artifactId>sqlancer</artifactId>
+      <version>${sqlancer.version}</version>
+    </dependency>
+
+    <!-- CUBRID JDBC — Maven Central 에 없다. $CUBRID/jdbc/cubrid_jdbc.jar 를 로컬 설치 -->
+    <dependency>
+      <groupId>cubrid</groupId>
+      <artifactId>cubrid-jdbc</artifactId>
+      <version>${cubrid.jdbc.version}</version>
+    </dependency>
+
+    <!-- ServiceLoader 등록 파일(META-INF/services)을 컴파일 시 자동 생성 -->
+    <dependency>
+      <groupId>com.google.auto.service</groupId>
+      <artifactId>auto-service</artifactId>
+      <version>${auto-service.version}</version>
+      <optional>true</optional>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <annotationProcessorPaths>
+            <path>
+              <groupId>com.google.auto.service</groupId>
+              <artifactId>auto-service</artifactId>
+              <version>${auto-service.version}</version>
+            </path>
+          </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+      <!--
+        실행용 classpath 를 target/deps 로 복사. SQLancer 는 ServiceLoader 로 provider 를
+        찾으므로 shaded fat-jar 를 만들면 META-INF/services 병합 문제로 provider 가
+        조용히 사라질 수 있다 (sqlancer#799). 평범한 classpath 실행을 기본으로 한다.
+      -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.7.1</version>
+        <executions>
+          <execution>
+            <id>copy-deps</id>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/deps</outputDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
