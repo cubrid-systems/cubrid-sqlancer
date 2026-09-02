@@ -26,6 +26,7 @@ import sqlancer.cubrid.gen.CUBRIDIndexGenerator;
 import sqlancer.cubrid.gen.CUBRIDInsertGenerator;
 import sqlancer.cubrid.gen.CUBRIDTableGenerator;
 import sqlancer.cubrid.gen.CUBRIDUpdateGenerator;
+import sqlancer.cubrid.gen.CUBRIDViewGenerator;
 
 /**
  * CUBRID provider.
@@ -57,7 +58,11 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
         /**
          * 인덱스가 없으면 옵티마이저가 고를 접근 경로가 하나뿐이라 NoREC 이 볼 재작성 자체가 거의 없다. 탐지력의 지렛대는 여기다.
          */
-        CREATE_INDEX(CUBRIDIndexGenerator::getQuery);
+        CREATE_INDEX(CUBRIDIndexGenerator::getQuery),
+        /**
+         * 뷰는 옵티마이저에 병합이냐 물리화냐를 판단하게 만든다. 지금까지 찾은 결함이 모두 재작성 계열이라 같은 지점을 다른 각도에서 누른다.
+         */
+        CREATE_VIEW(CUBRIDViewGenerator::getQuery);
 
         private final SQLQueryProvider<CUBRIDGlobalState> sqlQueryProvider;
 
@@ -177,6 +182,8 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
             return r.getInteger(0, 5);
         case CREATE_INDEX:
             return r.getInteger(0, 5);
+        case CREATE_VIEW:
+            return r.getInteger(0, 2);
         default:
             throw new AssertionError(a);
         }

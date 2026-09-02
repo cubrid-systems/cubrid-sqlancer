@@ -185,7 +185,7 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 |---|---|
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
-| schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
+| schema, DDL, DML | ✅ `CREATE TABLE`, `CREATE VIEW`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
 | **oracles** | `NOREC`, `WHERE`, `GROUP_BY`, `DISTINCT`, `AGGREGATE` |
 | NoREC | ✅ 534,789 queries, 91% statement success |
 | TLP `WHERE` | ✅ 718,341 queries, 95% |
@@ -193,10 +193,10 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | TLP `DISTINCT` | ✅ 174,309 queries, 96% |
 | TLP `AGGREGATE` | ✅ runs; re-aggregates the pieces with MIN, MAX, SUM and COUNT |
 | oracles not wired | `HAVING` — it partitions groups rather than rows, which is a third equation |
-| findings | `docs/findings/` — two wrong results in outer joins, both reproduced by hand |
+| findings | `docs/findings/` — two wrong results in outer joins, reproduced by hand, plus one open lead |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
-| actions not covered | `CREATE VIEW`, `ALTER TABLE` |
+| actions not covered | `ALTER TABLE` |
 | unit tests | ✅ 17, on the SQL rendering and the type model — `mvn test` |
 | concurrency | ❌ single-threaded by construction |
 
