@@ -10,10 +10,8 @@ provider, supplied as a jar on the classpath rather than as a fork.
 For engine developers and QA. Part of
 [CUBRID Systems Research](https://github.com/cubrid-systems).
 
-> **Where it is:** the provider runs. A single session executed 37,373 queries at 543 q/s with the
-> NoREC oracle and found no mismatch. Two things are open: the type and action surface is still
-> narrow, and the server crashes every few minutes under this workload for reasons not yet pinned
-> down. See [Status](#status).
+> **Where it is:** the provider runs. One session executed 37,373 queries at 543 q/s under the NoREC
+> oracle with no mismatch. The type and action surface is still narrow — see [Status](#status).
 
 ## Prerequisites
 
@@ -24,7 +22,7 @@ For engine developers and QA. Part of
 | **A CUBRID install tree** | the engine under test. Your own build (`install.out`) or an unpacked release. It is never modified — `cubrid-env.sh` symlinks `bin` and `lib` and gives the test environment its own `conf`, `log`, `var` and `databases` |
 | **A SQLancer checkout** | Maven Central's `com.sqlancer:sqlancer:2.0.0` was published in January 2022 and predates `NoRECGenerator`, `NoRECOracle` and `Reproducer`. It has to be built from source |
 
-Linux x86-64. A debug build of CUBRID is fine and is what the crash notes below refer to.
+Linux x86-64. A debug build is fine. The engine under test is whatever `$CUBRID` points at.
 
 ## Install
 
@@ -117,6 +115,13 @@ the OS command `cubrid createdb`. So `CUBRIDProvider.createDatabase()` connects 
 `cubrid-testdb.sh` prepared earlier and drops the user tables and views inside it. Every thread would
 be dropping the same tables, which is why `--num-threads 1` is enforced rather than suggested.
 
+**Replay is by seed, not by log.** A session log holds only a fraction of a run — one 37,373-query
+run left 319 statements in its log — so a log cannot be shrunk into a minimal reproduction. The
+`-- seed value:` in the log is what matters: `crash-repro.sh --seed` makes SQLancer regenerate the
+same database and query stream deterministically. Replay also defaults to JDBC, because SQLancer
+reaches the server through broker and CAS while `csql` attaches to it directly, and the two paths do
+not run the same code.
+
 **BOOLEAN is not a column type.** CUBRID has no storable boolean; a predicate exists only as the
 result of a comparison. `CUBRIDDataType.BOOLEAN` is therefore an expression-only pseudo-type that
 `getRandomStorable()` never returns, and boolean constants are written `(1 = 1)` and `(1 = 0)`
@@ -175,34 +180,15 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 
 | | |
 |---|---|
+| engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
-| schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE` |
-| **NoREC oracle** | ✅ verified in a real run — 37,373 queries, 543 q/s, no mismatch yet |
-| TLP (`WHERE`) oracle | ⚠️ wired but never verified |
+| schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
+| **NoREC oracle** | ✅ 37,373 queries at 543 q/s, no mismatch |
+| TLP (`WHERE`) oracle | ⚠️ wired, not yet run |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
-| actions not covered | `CREATE INDEX`, `DELETE`, `CREATE VIEW`, `ALTER TABLE` |
+| actions not covered | `CREATE VIEW`, `ALTER TABLE` |
 | concurrency | ❌ single-threaded by construction |
-
-### The open one: the server keeps crashing
-
-Under this workload a CUBRID 11.5.0 **debug build** dies every three to six minutes — six crashes in
-twenty-six minutes, at 18:14:31, 18:19:17, 18:25:35, 18:30:46, 18:34:01 and 18:40:31.
-
-It is not reportable yet, and the reasons are worth being precise about:
-
-- replaying the crashing session's SQL through `csql` did **not** kill the server
-- the `*.coredump` stack files came out **zero bytes**, so there is no backtrace to read — older
-  files in the same tree are 1811 bytes and perfectly readable, so the mechanism does work
-- whether this is a debug-build assertion, and whether a release build survives it, is unknown
-
-`scripts/crash-repro.sh --reduce` exists to close this: it replays a session log, decides whether the
-server died by watching the server pid, and then reduces the sequence — binary search on the prefix,
-then statement-by-statement removal — down to the shortest thing that still crashes.
-
-```bash
-scripts/crash-repro.sh --log logs/cubrid/database0-cur.log --reduce --trials 3
-```
 
 ## Layout
 
@@ -214,7 +200,7 @@ cubrid-sqlancer/
 │   ├── bootstrap.sh                 build SQLancer, install it and the JDBC driver
 │   ├── cubrid-env.sh                an isolated CUBRID_HOME with its own ports and shm ids
 │   ├── cubrid-testdb.sh             create / reuse / recreate the test database; core-file policy
-│   └── crash-repro.sh               replay a session log, reduce it to a minimal crash
+│   └── crash-repro.sh               replay a run by seed, over JDBC, to reproduce a crash
 └── src/main/java/sqlancer/cubrid/
     ├── CUBRIDProvider.java          @AutoService entry point; empties the prepared database
     ├── CUBRIDOptions.java           --oracle, --test-database
@@ -238,7 +224,7 @@ Every one of these cost time here.
 | `cubrid server start` cannot find a database you just created | `CUBRID_DATABASES` was unset, so `createdb` wrote its own `databases.txt` into the current directory | the scripts always export it |
 | the disk fills in minutes | one 10–20 GB core per crash | `--core-dump off`, the default |
 | cores appear even with `--core-dump off` | `cub_master` restarted the server, and it inherited the master's limit | restart the master under the limit — the script does this |
-| `*.coredump` is zero bytes | the crash handler created the file but wrote no backtrace | unresolved; see Status |
+| `*.coredump` is zero bytes | the crash handler opened the file but wrote no backtrace | read the other files in that directory — not every crash writes one |
 | `cubrid broker start` never returns | debug-build behaviour | check the port instead: `ss -ltnp` |
 | `cubrid` missing from `--help` | `META-INF/services` was shaded away | do not build a fat jar |
 
