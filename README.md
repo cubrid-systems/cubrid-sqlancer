@@ -10,9 +10,9 @@ provider, supplied as a jar on the classpath rather than as a fork.
 For engine developers and QA. Part of
 [CUBRID Systems Research](https://github.com/cubrid-systems).
 
-> **Where it is:** four oracles run — NoREC plus ternary partitioning on `WHERE`, `GROUP BY` and
-> `DISTINCT` — at roughly 2,000 queries/s, none with a mismatch so far. The type surface is still
-> narrow; see [Status](#status).
+> **Where it is:** five oracles run — NoREC plus ternary partitioning on `WHERE`, `GROUP BY`,
+> `DISTINCT` and aggregates — at roughly 1,000-2,000 queries/s. Two wrong results found so far,
+> both in outer joins; see [Status](#status).
 
 ## Prerequisites
 
@@ -186,12 +186,14 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
 | schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
-| **oracles** | `NOREC`, `WHERE`, `GROUP_BY`, `DISTINCT` — all four verified, no mismatch |
+| **oracles** | `NOREC`, `WHERE`, `GROUP_BY`, `DISTINCT`, `AGGREGATE` |
 | NoREC | ✅ 534,789 queries, 91% statement success |
 | TLP `WHERE` | ✅ 718,341 queries, 95% |
 | TLP `GROUP_BY` | ✅ 177,277 queries, 95% |
 | TLP `DISTINCT` | ✅ 174,309 queries, 96% |
-| oracles not wired | `HAVING`, `AGGREGATE` — an aggregate over grouped rows is not preserved by partitioning the input the way a group key is |
+| TLP `AGGREGATE` | ✅ runs; re-aggregates the pieces with MIN, MAX, SUM and COUNT |
+| oracles not wired | `HAVING` — it partitions groups rather than rows, which is a third equation |
+| findings | `docs/findings/` — two wrong results in outer joins, both reproduced by hand |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
@@ -203,6 +205,7 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 cubrid-sqlancer/
 ├── pom.xml                          no shade plugin, on purpose
 ├── docs/assets/                     banner.svg, architecture.svg
+├── docs/findings/                   wrong results found, with reproductions
 ├── scripts/
 │   ├── bootstrap.sh                 build SQLancer, install it and the JDBC driver
 │   ├── cubrid-env.sh                an isolated CUBRID_HOME with its own ports and shm ids
@@ -217,7 +220,7 @@ cubrid-sqlancer/
     ├── CUBRIDToStringVisitor.java   CUBRID syntax, including LIMIT offset, count
     ├── ast/                         9 expression node types
     ├── gen/                         table, insert, update and expression generators
-    └── oracle/tlp/                  ternary partitioning: GROUP BY and DISTINCT
+    └── oracle/tlp/                  ternary partitioning: GROUP BY, DISTINCT, aggregates
 ```
 
 ## Contributing
