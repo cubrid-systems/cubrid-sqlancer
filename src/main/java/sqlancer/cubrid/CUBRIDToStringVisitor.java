@@ -1,7 +1,9 @@
 package sqlancer.cubrid;
 
 import sqlancer.common.ast.newast.NewToStringVisitor;
+import sqlancer.cubrid.ast.CUBRIDBetweenOperation;
 import sqlancer.cubrid.ast.CUBRIDConstant;
+import sqlancer.cubrid.ast.CUBRIDInOperation;
 import sqlancer.cubrid.ast.CUBRIDExpression;
 import sqlancer.cubrid.ast.CUBRIDJoin;
 import sqlancer.cubrid.ast.CUBRIDSelect;
@@ -16,6 +18,10 @@ public class CUBRIDToStringVisitor extends NewToStringVisitor<CUBRIDExpression> 
             visit((CUBRIDSelect) expr);
         } else if (expr instanceof CUBRIDJoin) {
             visit((CUBRIDJoin) expr);
+        } else if (expr instanceof CUBRIDBetweenOperation) {
+            visit((CUBRIDBetweenOperation) expr);
+        } else if (expr instanceof CUBRIDInOperation) {
+            visit((CUBRIDInOperation) expr);
         } else {
             throw new AssertionError(expr.getClass());
         }
@@ -41,6 +47,29 @@ public class CUBRIDToStringVisitor extends NewToStringVisitor<CUBRIDExpression> 
             sb.append(" ON ");
             visit(join.getOnCondition());
         }
+    }
+
+    private void visit(CUBRIDBetweenOperation op) {
+        sb.append("(");
+        visit(op.getExpr());
+        sb.append(op.isNot() ? " NOT BETWEEN " : " BETWEEN ");
+        visit(op.getLeft());
+        sb.append(" AND ");
+        visit(op.getRight());
+        sb.append(")");
+    }
+
+    private void visit(CUBRIDInOperation op) {
+        sb.append("(");
+        visit(op.getExpr());
+        sb.append(op.isNot() ? " NOT IN (" : " IN (");
+        for (int i = 0; i < op.getListElements().size(); i++) {
+            if (i != 0) {
+                sb.append(", ");
+            }
+            visit(op.getListElements().get(i));
+        }
+        sb.append("))");
     }
 
     private void visit(CUBRIDConstant constant) {

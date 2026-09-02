@@ -17,10 +17,12 @@ import sqlancer.cubrid.CUBRIDSchema.CUBRIDCompositeDataType;
 import sqlancer.cubrid.CUBRIDSchema.CUBRIDDataType;
 import sqlancer.cubrid.CUBRIDSchema.CUBRIDTable;
 import sqlancer.cubrid.CUBRIDToStringVisitor;
+import sqlancer.cubrid.ast.CUBRIDBetweenOperation;
 import sqlancer.cubrid.ast.CUBRIDBinaryOperation;
 import sqlancer.cubrid.ast.CUBRIDColumnReference;
 import sqlancer.cubrid.ast.CUBRIDConstant;
 import sqlancer.cubrid.ast.CUBRIDExpression;
+import sqlancer.cubrid.ast.CUBRIDInOperation;
 import sqlancer.cubrid.ast.CUBRIDJoin;
 import sqlancer.cubrid.ast.CUBRIDSelect;
 import sqlancer.cubrid.ast.CUBRIDTableReference;
@@ -66,8 +68,8 @@ public final class CUBRIDExpressionGenerator
         }
 
         if (type.getType() == CUBRIDDataType.BOOLEAN) {
-            // CUBRID 에는 저장 가능한 boolean 이 없다. 술어는 비교 또는 논리 결합으로만 만든다.
-            switch (Randomly.fromOptions(0, 1, 2)) {
+            // CUBRID 에는 저장 가능한 boolean 이 없다. 술어는 비교·논리 결합·범위·목록으로만 만든다.
+            switch (Randomly.fromOptions(0, 1, 2, 3, 4, 5)) {
             case 0: {
                 CUBRIDCompositeDataType operandType = CUBRIDCompositeDataType.getRandomStorable();
                 return new CUBRIDBinaryOperation(generateExpression(operandType, depth + 1),
@@ -76,8 +78,27 @@ public final class CUBRIDExpressionGenerator
             case 1:
                 return new CUBRIDBinaryOperation(generateExpression(type, depth + 1),
                         generateExpression(type, depth + 1), CUBRIDBinaryLogicalOperator.getRandom());
-            default:
+            case 2:
                 return isNull(generateExpression(CUBRIDCompositeDataType.getRandomStorable(), depth + 1));
+            case 3: {
+                // BETWEEN — 범위 술어는 인덱스 스캔으로 접히는 대표적인 형태다.
+                CUBRIDCompositeDataType t = CUBRIDCompositeDataType.getRandomStorable();
+                return new CUBRIDBetweenOperation(generateExpression(t, depth + 1),
+                        generateExpression(t, depth + 1), generateExpression(t, depth + 1), Randomly.getBoolean());
+            }
+            case 4: {
+                // IN — OR 사슬로 풀릴 수도, 인덱스 조회로 접힐 수도 있다.
+                CUBRIDCompositeDataType t = CUBRIDCompositeDataType.getRandomStorable();
+                List<CUBRIDExpression> elements = new ArrayList<>();
+                int n = Randomly.smallNumber() + 1;
+                for (int i = 0; i < n; i++) {
+                    elements.add(generateExpression(t, depth + 1));
+                }
+                return new CUBRIDInOperation(generateExpression(t, depth + 1), elements, Randomly.getBoolean());
+            }
+            default:
+                // NOT — 3치 논리에서 부정은 UNKNOWN 을 그대로 통과시킨다. NoREC 이 특히 좋아하는 지점.
+                return negatePredicate(generateExpression(type, depth + 1));
             }
         }
 

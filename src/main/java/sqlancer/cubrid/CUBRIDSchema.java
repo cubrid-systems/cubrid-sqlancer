@@ -4,7 +4,6 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import sqlancer.Randomly;
@@ -27,6 +26,12 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
     private static final String COLUMN_QUERY = "SELECT attr_name, data_type, prec FROM db_attribute "
             + "WHERE class_name = '%s' ORDER BY def_order";
 
+    /**
+     * 인덱스를 읽어오지 않으면 {@code getFreeIndexName()} 이 항상 {@code i0} 을 돌려주고, 모든 CREATE INDEX 가
+     * {@code Index "i0" already defined} 로 실패한다. 실제로 한 세션에서 46건이 그렇게 낭비됐다.
+     */
+    private static final String INDEX_QUERY = "SELECT index_name FROM db_index WHERE class_name = '%s'";
+
     public CUBRIDSchema(List<CUBRIDTable> databaseTables) {
         super(databaseTables);
     }
@@ -44,7 +49,7 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
 
     private static CUBRIDTable buildTable(SQLConnection connection, String name, boolean isView) throws SQLException {
         List<CUBRIDColumn> columns = getTableColumns(connection, name);
-        CUBRIDTable t = new CUBRIDTable(name, columns, isView);
+        CUBRIDTable t = new CUBRIDTable(name, columns, getTableIndexes(connection, name), isView);
         for (CUBRIDColumn c : columns) {
             c.setTable(t);
         }
@@ -59,6 +64,17 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
             }
         }
         return names;
+    }
+
+    private static List<TableIndex> getTableIndexes(SQLConnection con, String tableName) throws SQLException {
+        List<TableIndex> indexes = new ArrayList<>();
+        try (Statement s = con.createStatement();
+                ResultSet rs = s.executeQuery(String.format(INDEX_QUERY, tableName))) {
+            while (rs.next()) {
+                indexes.add(TableIndex.create(rs.getString("index_name")));
+            }
+        }
+        return indexes;
     }
 
     private static List<CUBRIDColumn> getTableColumns(SQLConnection con, String tableName) throws SQLException {
@@ -77,8 +93,9 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
     public static class CUBRIDTable
             extends AbstractRelationalTable<CUBRIDSchema.CUBRIDColumn, TableIndex, CUBRIDProvider.CUBRIDGlobalState> {
 
-        public CUBRIDTable(String tableName, List<CUBRIDSchema.CUBRIDColumn> columns, boolean isView) {
-            super(tableName, columns, Collections.emptyList(), isView);
+        public CUBRIDTable(String tableName, List<CUBRIDSchema.CUBRIDColumn> columns, List<TableIndex> indexes,
+                boolean isView) {
+            super(tableName, columns, indexes, isView);
         }
     }
 

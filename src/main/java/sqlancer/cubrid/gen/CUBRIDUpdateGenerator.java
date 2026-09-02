@@ -38,6 +38,7 @@ public final class CUBRIDUpdateGenerator extends AbstractUpdateGenerator<CUBRIDC
         updateColumns(columns);
         // SET 절의 상수만으로도 타입 범위 초과가 발생한다. WHERE 유무와 무관하게 등록해야 한다.
         CUBRIDErrors.addExpressionErrors(errors);
+        errors.add("unique constraint violations");
         if (Randomly.getBooleanWithSmallProbability()) {
             appendWhereClause(CUBRIDToStringVisitor.asString(
                     gen.generateExpression(CUBRIDCompositeDataType.getRandomWithType(CUBRIDDataType.BOOLEAN))));

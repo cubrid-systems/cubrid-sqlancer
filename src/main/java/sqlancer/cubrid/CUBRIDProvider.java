@@ -21,6 +21,8 @@ import sqlancer.SQLProviderAdapter;
 import sqlancer.StatementExecutor;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
+import sqlancer.cubrid.gen.CUBRIDDeleteGenerator;
+import sqlancer.cubrid.gen.CUBRIDIndexGenerator;
 import sqlancer.cubrid.gen.CUBRIDInsertGenerator;
 import sqlancer.cubrid.gen.CUBRIDTableGenerator;
 import sqlancer.cubrid.gen.CUBRIDUpdateGenerator;
@@ -49,7 +51,13 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
     }
 
     public enum Action implements AbstractAction<CUBRIDGlobalState> {
-        INSERT(CUBRIDInsertGenerator::getQuery), UPDATE(CUBRIDUpdateGenerator::getQuery);
+        INSERT(CUBRIDInsertGenerator::getQuery),
+        UPDATE(CUBRIDUpdateGenerator::getQuery),
+        DELETE(CUBRIDDeleteGenerator::getQuery),
+        /**
+         * 인덱스가 없으면 옵티마이저가 고를 접근 경로가 하나뿐이라 NoREC 이 볼 재작성 자체가 거의 없다. 탐지력의 지렛대는 여기다.
+         */
+        CREATE_INDEX(CUBRIDIndexGenerator::getQuery);
 
         private final SQLQueryProvider<CUBRIDGlobalState> sqlQueryProvider;
 
@@ -163,6 +171,10 @@ public class CUBRIDProvider extends SQLProviderAdapter<CUBRIDProvider.CUBRIDGlob
             return r.getInteger(0, globalState.getOptions().getMaxNumberInserts());
         case UPDATE:
             return r.getInteger(0, 10);
+        case DELETE:
+            return r.getInteger(0, 5);
+        case CREATE_INDEX:
+            return r.getInteger(0, 5);
         default:
             throw new AssertionError(a);
         }

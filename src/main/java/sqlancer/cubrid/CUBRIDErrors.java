@@ -30,6 +30,8 @@ public final class CUBRIDErrors {
         // 수치
         errors.add("Division by zero");
         errors.add("division by zero");
+        // CUBRID 의 실제 문구. "Division by zero" 만으로는 잡히지 않는다.
+        errors.add("Attempt to divide by zero");
         errors.add("overflow");
         errors.add("Overflow");
         errors.add("out of range");
@@ -56,6 +58,8 @@ public final class CUBRIDErrors {
         errors.add("is not allowed to be NULL");
         errors.add("duplicate");
         errors.add("Duplicate");
+        // UNIQUE 인덱스가 있는 테이블에 무작위 값을 넣으면 당연히 부딪힌다.
+        errors.add("unique constraint violations");
         return errors;
     }
 
