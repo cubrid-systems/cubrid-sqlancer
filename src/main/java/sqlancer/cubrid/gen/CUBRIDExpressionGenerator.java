@@ -1,5 +1,7 @@
 package sqlancer.cubrid.gen;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -120,12 +122,32 @@ public final class CUBRIDExpressionGenerator
         return CUBRIDConstant.createNullConstant();
     }
 
+    /**
+     * 정밀도와 스케일 안에 들어가는 십진 리터럴. 벗어나면 CUBRID 가 data overflow 로 거부해 반복이 낭비된다.
+     */
+    private static CUBRIDExpression numericConstant(int precision, int scale) {
+        int p = Math.max(1, Math.min(precision, CUBRIDCompositeDataType.MAX_NUMERIC_PRECISION));
+        int s = Math.max(0, Math.min(scale, p));
+        StringBuilder digits = new StringBuilder();
+        int nrDigits = 1 + (int) Randomly.getNotCachedInteger(0, p);
+        for (int i = 0; i < nrDigits; i++) {
+            digits.append((char) ('0' + Randomly.getNotCachedInteger(0, 10)));
+        }
+        BigDecimal value = new BigDecimal(new BigInteger(digits.toString()), s);
+        if (Randomly.getBoolean()) {
+            value = value.negate();
+        }
+        return CUBRIDConstant.createNumericConstant(value.toPlainString());
+    }
+
     private static boolean isNumeric(CUBRIDDataType t) {
         switch (t) {
         case INTEGER:
         case SMALLINT:
         case BIGINT:
         case DOUBLE:
+        case FLOAT:
+        case NUMERIC:
             return true;
         default:
             return false;
@@ -151,7 +173,10 @@ public final class CUBRIDExpressionGenerator
         case BIGINT:
             return CUBRIDConstant.createIntConstant(r.getInteger());
         case DOUBLE:
+        case FLOAT:
             return CUBRIDConstant.createDoubleConstant(r.getDouble());
+        case NUMERIC:
+            return numericConstant(type.getSize(), type.getScale());
         case CHAR:
         case VARCHAR:
             return CUBRIDConstant.createStringConstant(r.getString(), Math.max(type.getSize(), 1));

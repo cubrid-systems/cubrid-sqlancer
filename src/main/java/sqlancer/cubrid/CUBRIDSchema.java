@@ -23,7 +23,7 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
             + "WHERE is_system_class = 'NO' AND class_type = 'VCLASS'";
 
     /** def_order 로 정렬해야 INSERT 의 컬럼 순서와 일치한다. */
-    private static final String COLUMN_QUERY = "SELECT attr_name, data_type, prec FROM db_attribute "
+    private static final String COLUMN_QUERY = "SELECT attr_name, data_type, prec, scale FROM db_attribute "
             + "WHERE class_name = '%s' ORDER BY def_order";
 
     /**
@@ -84,7 +84,7 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
             while (rs.next()) {
                 CUBRIDDataType type = CUBRIDDataType.from(rs.getString("data_type"));
                 columns.add(new CUBRIDColumn(rs.getString("attr_name"), null,
-                        new CUBRIDCompositeDataType(type, rs.getInt("prec"))));
+                        new CUBRIDCompositeDataType(type, rs.getInt("prec"), rs.getInt("scale"))));
             }
         }
         return columns;
@@ -115,7 +115,12 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
      */
     public enum CUBRIDDataType {
 
-        INTEGER, SMALLINT, BIGINT, DOUBLE, CHAR, VARCHAR, DATE, TIME, DATETIME,
+        INTEGER, SMALLINT, BIGINT, DOUBLE,
+        /** 단정도. CUBRID 는 정밀도가 7 을 넘으면 DOUBLE 로 승격한다. */
+        FLOAT,
+        /** 고정 소수점. 정밀도 최대 38, 스케일은 정밀도 이하. */
+        NUMERIC,
+        CHAR, VARCHAR, DATE, TIME, DATETIME,
         /** 식 전용 — 컬럼으로 만들지 않는다. */
         BOOLEAN,
         /** 상수 NULL 전용. */
@@ -142,7 +147,11 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
             if ("TIMESTAMP".equals(t)) {
                 return DATETIME;
             }
-            if ("FLOAT".equals(t) || "NUMERIC".equals(t) || "MONETARY".equals(t)) {
+            if ("DECIMAL".equals(t)) {
+                return NUMERIC;
+            }
+            // MONETARY 는 컬럼으로 만들지 않지만 읽어올 수는 있다.
+            if ("MONETARY".equals(t)) {
                 return DOUBLE;
             }
             for (CUBRIDDataType value : values()) {
@@ -155,12 +164,22 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
     }
 
     public static class CUBRIDCompositeDataType {
+
+        /** CUBRID 의 NUMERIC 정밀도 상한. 39 는 "Precision (39) too large" 로 거부된다. */
+        public static final int MAX_NUMERIC_PRECISION = 38;
+
         private final int size;
+        private final int scale;
         private final CUBRIDDataType type;
 
         public CUBRIDCompositeDataType(CUBRIDDataType type, int size) {
+            this(type, size, 0);
+        }
+
+        public CUBRIDCompositeDataType(CUBRIDDataType type, int size, int scale) {
             this.type = type;
             this.size = size;
+            this.scale = scale;
         }
 
         /** 컬럼 정의에 쓸 수 있는 임의 타입. */
@@ -169,17 +188,18 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
         }
 
         public static CUBRIDCompositeDataType getRandomWithType(CUBRIDDataType type) {
-            int size;
             switch (type) {
             case CHAR:
             case VARCHAR:
-                size = Randomly.fromOptions(8, 16, 32);
-                break;
-            default:
-                size = 0;
-                break;
+                return new CUBRIDCompositeDataType(type, Randomly.fromOptions(8, 16, 32));
+            case NUMERIC: {
+                int precision = 1 + (int) Randomly.getNotCachedInteger(0, MAX_NUMERIC_PRECISION);
+                int scale = (int) Randomly.getNotCachedInteger(0, precision + 1);
+                return new CUBRIDCompositeDataType(type, precision, scale);
             }
-            return new CUBRIDCompositeDataType(type, size);
+            default:
+                return new CUBRIDCompositeDataType(type, 0);
+            }
         }
 
         public CUBRIDDataType getType() {
@@ -190,9 +210,19 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
             return size;
         }
 
-        /** DDL 에 쓰는 표기. CHAR/VARCHAR 만 길이를 갖는다. */
+        public int getScale() {
+            return scale;
+        }
+
+        /**
+         * DDL 에 쓰는 표기. CHAR/VARCHAR 는 길이, NUMERIC 은 정밀도와 스케일을 갖는다. 나머지에 괄호를 붙이면 CUBRID 가 거부하거나
+         * (FLOAT 처럼) 다른 타입으로 승격한다.
+         */
         public String toSqlString() {
-            if (size > 0) {
+            if (type == CUBRIDDataType.NUMERIC) {
+                return "NUMERIC(" + size + ", " + scale + ")";
+            }
+            if (size > 0 && (type == CUBRIDDataType.CHAR || type == CUBRIDDataType.VARCHAR)) {
                 return type.name() + "(" + size + ")";
             }
             return type.name();
@@ -207,12 +237,12 @@ public class CUBRIDSchema extends AbstractSchema<CUBRIDProvider.CUBRIDGlobalStat
                 return false;
             }
             CUBRIDCompositeDataType other = (CUBRIDCompositeDataType) o;
-            return type == other.type && size == other.size;
+            return type == other.type && size == other.size && scale == other.scale;
         }
 
         @Override
         public int hashCode() {
-            return type.hashCode() * 31 + size;
+            return (type.hashCode() * 31 + size) * 31 + scale;
         }
     }
 }

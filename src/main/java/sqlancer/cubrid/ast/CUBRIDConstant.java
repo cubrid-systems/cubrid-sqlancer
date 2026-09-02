@@ -168,6 +168,26 @@ public class CUBRIDConstant implements CUBRIDExpression {
         return new CUBRIDBooleanConstant(val);
     }
 
+    /**
+     * NUMERIC 리터럴. 값을 {@code double} 로 만들면 지수 표기가 섞이고 스케일이 어긋나므로 십진 문자열을 그대로 쓴다.
+     */
+    public static class CUBRIDNumericConstant extends CUBRIDConstant {
+        private final String textRepr;
+
+        public CUBRIDNumericConstant(String textRepr) {
+            this.textRepr = textRepr;
+        }
+
+        @Override
+        public String toString() {
+            return textRepr;
+        }
+    }
+
+    public static CUBRIDExpression createNumericConstant(String textRepr) {
+        return new CUBRIDNumericConstant(textRepr);
+    }
+
     public static CUBRIDExpression createBooleanUnknownConstant() {
         return new CUBRIDBooleanUnknownConstant();
     }
