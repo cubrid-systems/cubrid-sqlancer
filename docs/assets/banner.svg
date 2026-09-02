@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 200" width="880" height="200" font-family="Helvetica, Arial, sans-serif" role="img" aria-label="cubrid-sqlancer — goal: find the wrong-result bugs in CUBRID that an expected-answer suite structurally cannot reach. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.">
+<style>
+  .name{font-size:36px;font-weight:700;fill:#f8fafc;letter-spacing:-0.5px}
+  .tag{font-size:13.5px;fill:#94a3b8}
+  .meta{font-size:11px;fill:#64748b;letter-spacing:1.2px}
+  .q{font-size:9.5px;fill:#cbd5e1;font-family:"SFMono-Regular",Menlo,Consolas,monospace}
+  .lbl{font-size:9px;font-weight:700;fill:#94a3b8;letter-spacing:1px}
+  .num{font-size:17px;font-weight:700;fill:#e2e8f0}
+  .bad{font-size:20px;font-weight:700;fill:#f87171}
+  .node{fill:#1e293b;stroke:#334155;stroke-width:1.2}
+  .wire{stroke:#475569;stroke-width:1.4;fill:none}
+</style>
+<rect x="0" y="0" width="880" height="200" fill="#0f172a"/>
+<rect x="0" y="0" width="6" height="200" fill="#2563eb"/>
+
+<text class="name" x="40" y="76">cubrid-sqlancer</text>
+<text class="tag"  x="41" y="104">Find the wrong-result bugs an expected-answer suite structurally cannot reach.</text>
+<text class="tag"  x="41" y="123">Two queries must count the same thing — the optimizer only gets to rewrite one.</text>
+<text class="meta" x="41" y="158">FOR ENGINE DEVELOPERS AND QA · CUBRID SYSTEMS RESEARCH</text>
+
+<!-- NoREC illustration -->
+<text class="lbl" x="576" y="34">OPTIMIZED</text>
+<rect class="node" x="572" y="42" width="150" height="40" rx="6"/>
+<text class="q" x="584" y="60">COUNT(*) FROM t</text>
+<text class="q" x="584" y="73">WHERE p</text>
+<text class="num" x="742" y="70">41</text>
+
+<text class="lbl" x="576" y="112">REFERENCE</text>
+<rect class="node" x="572" y="120" width="150" height="40" rx="6"/>
+<text class="q" x="584" y="138">SUM(CASE WHEN p</text>
+<text class="q" x="584" y="151">THEN 1 ELSE 0 END)</text>
+<text class="num" x="742" y="148">39</text>
+
+<path class="wire" d="M775 62 L806 62 L806 140 L775 140"/>
+<text class="bad" x="818" y="108">≠</text>
+</svg>

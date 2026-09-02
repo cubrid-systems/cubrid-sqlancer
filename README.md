@@ -1,191 +1,265 @@
-# cubrid-sqlancer
+![cubrid-sqlancer — goal: find the wrong-result bugs in CUBRID that an expected-answer suite structurally cannot reach. Two queries must count the same thing, and the optimizer only gets to rewrite one of them.](docs/assets/banner.svg)
 
-CUBRID 용 [SQLancer](https://github.com/sqlancer/sqlancer) provider. **논리 버그(wrong-result)** 를
-의미 등가 질의 쌍으로 검증한다.
+**cubrid-sqlancer** is a [SQLancer](https://github.com/sqlancer/sqlancer) provider for CUBRID.
+It looks for **wrong-result bugs** — the kind where the engine returns an answer that is simply
+not the right one — and it does so without needing to know the right answer in advance.
 
-- 축: `cubrid-testkit` ROADMAP §6a-E3 (Logic bug detection)
-- 1차 oracle: **NoREC** (TLP 는 후속)
-- 상류 SQLancer 에는 CUBRID provider 가 **없다** (2026-09 기준 23개 provider 중 미포함). 이 저장소가 그것을 제공한다.
+Upstream SQLancer ships providers for 23 systems. CUBRID is not one of them. This repository is that
+provider, supplied as a jar on the classpath rather than as a fork.
 
----
+For engine developers and QA. Part of
+[CUBRID Systems Research](https://github.com/cubrid-systems).
 
-## 왜 별도 저장소인가
+> **Where it is:** the provider runs. A single session executed 37,373 queries at 543 q/s with the
+> NoREC oracle and found no mismatch. Two things are open: the type and action surface is still
+> narrow, and the server crashes every few minutes under this workload for reasons not yet pinned
+> down. See [Status](#status).
 
-SQLancer 는 provider 를 `ServiceLoader` 로 찾는다. `Main.java` 의 주석이 명시한다:
+## Prerequisites
 
-> *"To register a new provider, it is necessary to implement the DatabaseProvider interface and add an
-> additional configuration file... we use an `@AutoService` annotation to create the configuration file
-> automatically. **This allows SQLancer to pick up providers in other JARs on the classpath.**"*
-
-즉 SQLancer 본체를 fork 하지 않고 **classpath 에 얹는 별도 jar** 로 provider 를 공급할 수 있다.
-이 저장소는 그 방식을 쓴다 — 상류 rebase 부채가 없고, 경계가 분명하다.
-
-⚠️ 단, fat-jar(shade)로 묶으면 `META-INF/services` 병합이 깨져 provider 가 **조용히 사라질 수 있다**
-([sqlancer#799](https://github.com/sqlancer/sqlancer/issues/799)). 그래서 이 프로젝트는 shade 를 쓰지 않고
-`target/classes` + `target/deps/*` 를 그대로 classpath 에 얹는다.
-
----
-
-## Bootstrap
-
-### 1. 의존 설치
-
-```bash
-scripts/bootstrap.sh
-```
-
-두 가지를 로컬 Maven 저장소에 넣는다.
-
-| 의존 | 왜 로컬 설치인가 |
+| | Why |
 |---|---|
-| `com.sqlancer:sqlancer` | Maven Central 의 `2.0.0` 은 **2022-01 게시본**이라 `NoRECGenerator` · `NoRECOracle` · `Reproducer` 가 없다. 반드시 소스에서 빌드해야 한다. |
-| `cubrid:cubrid-jdbc` | Maven Central 에 없다. `$CUBRID/jdbc/cubrid_jdbc.jar` 를 설치한다. |
+| **JDK 11+** | SQLancer targets `--release 11`. A JRE is not enough — you need `javac` |
+| **Maven 3.9+** | to build both SQLancer and this provider |
+| **A CUBRID install tree** | the engine under test. Your own build (`install.out`) or an unpacked release. It is never modified — `cubrid-env.sh` symlinks `bin` and `lib` and gives the test environment its own `conf`, `log`, `var` and `databases` |
+| **A SQLancer checkout** | Maven Central's `com.sqlancer:sqlancer:2.0.0` was published in January 2022 and predates `NoRECGenerator`, `NoRECOracle` and `Reproducer`. It has to be built from source |
 
-필요 도구: JDK 11+ (SQLancer 가 `--release 11`), Maven 3.9+.
+Linux x86-64. A debug build of CUBRID is fine and is what the crash notes below refer to.
 
-### 2. 격리된 CUBRID 실행 환경
-
-```bash
-eval "$(scripts/cubrid-env.sh --source ~/cubrid/install.out)"
-```
-
-**왜 격리가 필요한가.** CUBRID 는 master 포트(기본 1523) · broker 포트(기본 33000/30000) · 공유메모리 ID 를
-설치 트리마다 같은 기본값으로 쓴다. 한 머신에서 여러 CUBRID 설치가 동시에 돌면 **먼저 뜬 master 가 포트를 잡고,
-나중 설치의 `cubrid` 명령들이 남의 master 에 붙는다.** 그러면 `cubrid server status` 가 남의 DB 를 보여주고,
-내 DB 는 관리 주체가 엇갈려 조용히 사라진다. (이 저장소를 만들면서 실제로 겪었다.)
-
-`cubrid-env.sh` 는 원본 설치를 **건드리지 않고** `bin`/`lib` 는 심볼릭 링크로 공유하되
-`conf`/`log`/`var`/`databases` 만 독립인 얇은 `CUBRID_HOME` 을 만든다. 기본 격리 값:
-
-| 항목 | 기본 |
-|---|---|
-| master 포트 (`cubrid_port_id`) | 1723 |
-| broker 포트 | query_editor 34000 / **BROKER1 34001** |
-| `APPL_SERVER_SHM_ID` | 34000, 34001 |
-| `MASTER_SHM_ID` | 34099 |
-
-⚠️ `MASTER_SHM_ID` 는 어떤 `APPL_SERVER_SHM_ID` 와도 달라야 한다. 같으면 CUBRID 가
-`config error, MASTER_SHM_ID = broker <name> APPL_SERVER_SHM_ID` 로 거부한다.
-
-### 3. 테스트 DB
+## Install
 
 ```bash
-scripts/cubrid-testdb.sh --reuse --port 34001
+git clone https://github.com/cubrid-systems/cubrid-sqlancer
+cd cubrid-sqlancer
+
+git clone https://github.com/sqlancer/sqlancer.git ../sqlancer-upstream
+scripts/bootstrap.sh          # builds SQLancer, installs it and the CUBRID JDBC jar into ~/.m2
+
+mvn package                   # target/classes + target/deps
 ```
 
-| 옵션 | 의미 |
-|---|---|
-| `--name <db>` | DB 이름 (기본 `sqlancer`) |
-| `--path <dir>` | DB 파일 위치 (기본 `$CUBRID_DATABASES/<name>`) |
-| `--reuse` | 있으면 그대로 쓰고, 없으면 생성 — 반복 실행/CI 용 |
-| `--recreate` | 있으면 지우고 새로 생성 — 깨끗한 상태 보장 |
-| `--status` | 현재 상태만 출력 |
+`scripts/bootstrap.sh` finds the JDBC driver at `$CUBRID/jdbc/cubrid_jdbc.jar`, or looks in
+`~/cubrid/install.out`, `~/CUBRID` and `/opt/cubrid` if `$CUBRID` is not set.
 
-⚠️ 스크립트는 `CUBRID_DATABASES` 를 반드시 export 한다. 없으면 `cubrid createdb` 가 **현재 디렉터리**의
-`databases.txt` 를 레지스트리로 삼아, 공용 레지스트리에 등록되지 않은 유령 DB 가 만들어진다.
+## Getting started
 
----
-
-## 실행
+Stand up an isolated engine, give it a database, and run the oracle against it.
 
 ```bash
-mvn package
-java -cp "target/classes:target/deps/*" sqlancer.Main \
-  --num-threads 1 --num-tries 100 --timeout-seconds 600 \
-  --host localhost --port 34001 --username dba --password "" \
-  cubrid --oracle NOREC --test-database sqlancer
+$ eval "$(scripts/cubrid-env.sh --source ~/cubrid/install.out)"
+==> creating isolated environment: .cubrid-env (source: /home/you/cubrid/install.out)
+==> done. master=1723 broker=34000 shm=34000
+
+$ scripts/cubrid-testdb.sh --reuse --port 34001
+==> creating database: sqlancer (.cubrid-env/databases/sqlancer, en_US.utf8)
+==> core files disabled (stack traces still land in $CUBRID/log/coredump)
+==> ready
+    JDBC URL: jdbc:CUBRID:localhost:34001:sqlancer:::
+
+$ java -cp "target/classes:target/deps/*" sqlancer.Main \
+    --num-threads 1 --num-tries 200 --timeout-seconds 600 \
+    --host localhost --port 34001 --username dba --password "" \
+    cubrid --oracle NOREC --test-database sqlancer
+[18:40:31] Executed 37373 queries (543 queries/s; successful statements: 93%).
 ```
 
-`sqlancer.Main --help` 의 command 목록에 `cubrid` 가 보이면 provider 가 정상 등록된 것이다.
+If `sqlancer.Main --help` lists `cubrid` among its commands, the provider was found. If it does not,
+see the note about fat jars in [Architecture](#architecture).
 
----
+`--num-threads` must be `1`. The provider refuses anything higher, and the reason is in
+[Design decisions](#design-decisions).
 
-## CUBRID 고유 설계 결정
+## Why it exists
 
-### 1. 데이터베이스를 만들지 않는다
+`cubrid-testkit` (and CTP before it) compares query output against a stored `.answer` file. That
+finds regressions in cases somebody already wrote down. It cannot find a wrong result in a query
+nobody has ever written, because there is nothing to compare against.
 
-CUBRID 에는 `CREATE DATABASE` SQL 문이 없다. 데이터베이스는 OS 명령 `cubrid createdb` 로만 생긴다.
-그래서 `CUBRIDProvider.createDatabase()` 는 **미리 준비된 DB 에 접속해 사용자 테이블/뷰만 지운다.**
-
-결과적으로 **`--num-threads 1` 이어야 한다.** 모든 스레드가 같은 DB 의 같은 테이블을 지우고 만들기 때문이며,
-provider 가 시작 시 이를 거부한다.
-
-### 2. BOOLEAN 은 컬럼 타입이 아니다
-
-CUBRID 에는 저장 가능한 boolean 타입이 없다. 술어는 비교/논리 연산의 결과로만 존재한다.
-그래서 `CUBRIDDataType.BOOLEAN` 은 **식 생성 전용**이고 `getRandomStorable()` 이 절대 돌려주지 않는다.
-boolean 상수도 이식성 있는 리터럴이 없어 `(1 = 1)` / `(1 = 0)` 으로 만든다.
-
-### 3. NoREC 질의 형태 — 상류 두 provider 와 다르게 썼다
+NoREC gets around this by not needing an expected answer at all. It builds two queries that must
+count the same rows, and lets the optimizer rewrite only one of them:
 
 ```sql
--- 최적화되는 쪽
+-- optimized: the optimizer is free to rewrite the predicate
 SELECT COUNT(*) FROM t WHERE <pred>;
 
--- 최적화되지 않는 쪽 (reference engine)
+-- reference: the predicate is pushed into the projection, where there is nothing to rewrite
 SELECT SUM(norec_count) FROM (
     SELECT CASE WHEN <pred> THEN 1 ELSE 0 END AS norec_count FROM t
 ) AS res;
 ```
 
-두 가지가 중요하다.
+Two different counts mean the optimizer rewrote the predicate into something that does not mean the
+same thing. That is a wrong-result bug, and it is an axis `cubrid-testkit` has no coverage on today.
 
-- **WHERE 를 반드시 지운다.** 술어가 안쪽 WHERE 에 남으면 두 질의가 같은 것을 세게 되어 oracle 이 아무것도
-  검출하지 못한다. 상류 **DuckDB** provider 는 `generateUnoptimizedQueryString` 에서 WHERE 를 지우지 않고,
-  **HSQLDB** provider 는 술어 자체를 `COUNT(*)` 로 대체해 술어를 잃는다. 둘 다 따르지 않았다.
-- **`CASE WHEN` 을 쓴다.** CUBRID 에 저장 가능한 BOOLEAN 이 없어 `CAST(pred AS INT)` 를 신뢰할 수 없다.
-  `CASE WHEN` 은 UNKNOWN 을 `ELSE` 로 보내므로 NoREC 이 요구하는 `IS TRUE` 의미와 정확히 같다.
-- **별칭을 `count` 로 쓰면 안 된다.** CUBRID 에서 `count` 는 예약어(집계 함수)라 `SUM(count)` 가 함수 호출로
-  파싱되어 `Syntax error: unexpected ')', expecting '('` 가 난다. 상류 DuckDB/HSQLDB provider 는 별칭으로
-  `count` 를 쓰지만 CUBRID 에서는 불가능하다. 이 저장소는 `norec_count` 를 쓴다.
+## Architecture
 
-### 4. 스키마 조회
+![Architecture: upstream SQLancer discovers this repo's provider through ServiceLoader, the provider drives an isolated CUBRID home, and every run leaves session logs and crash stacks as evidence](docs/assets/architecture.svg)
 
-`INFORMATION_SCHEMA` 대신 CUBRID 시스템 카탈로그를 쓴다.
+Upstream is built from source and left alone. `sqlancer.Main` calls
+`ServiceLoader.load(DatabaseProvider.class)`, and its own Javadoc explains why that matters:
+
+> *"To register a new provider, it is necessary to implement the DatabaseProvider interface and add
+> an additional configuration file... we use an `@AutoService` annotation to create the configuration
+> file automatically. **This allows SQLancer to pick up providers in other JARs on the classpath.**"*
+
+So there is no fork to rebase and no patch to carry. Should the provider mature, the path upstream
+stays open, because it follows the same package layout as the providers already there.
+
+⚠️ **Do not build a fat jar.** Shading merges away `META-INF/services`, and SQLancer's response to
+finding no providers is to quietly fall back to its built-in list
+([sqlancer#799](https://github.com/sqlancer/sqlancer/issues/799)). Nothing fails; CUBRID is simply
+absent. That is why `pom.xml` copies dependencies to `target/deps` instead.
+
+## Design decisions
+
+**It does not create a database.** CUBRID has no `CREATE DATABASE` statement — databases come from
+the OS command `cubrid createdb`. So `CUBRIDProvider.createDatabase()` connects to a database that
+`cubrid-testdb.sh` prepared earlier and drops the user tables and views inside it. Every thread would
+be dropping the same tables, which is why `--num-threads 1` is enforced rather than suggested.
+
+**BOOLEAN is not a column type.** CUBRID has no storable boolean; a predicate exists only as the
+result of a comparison. `CUBRIDDataType.BOOLEAN` is therefore an expression-only pseudo-type that
+`getRandomStorable()` never returns, and boolean constants are written `(1 = 1)` and `(1 = 0)`
+because there is no literal to rely on.
+
+**The reference query differs from both upstream examples.** Two details matter, and the two
+providers closest to CUBRID each get one of them wrong:
+
+- The `WHERE` clause has to be cleared. If the predicate stays in the inner query, both sides count
+  the same thing and the oracle can never fire. Upstream's **DuckDB** provider does not clear it.
+- The predicate has to survive into the projection. Upstream's **HSQLDB** provider replaces it with
+  `COUNT(*)`, losing the predicate entirely.
+- The alias must not be `count`. It is a reserved word in CUBRID, so `SUM(count)` parses as a
+  function call and fails with `Syntax error: unexpected ')', expecting '('`. This one cost a full
+  run: the oracle looked healthy because DDL and DML kept succeeding, while every single oracle query
+  died on a syntax error and the executed-query counter sat at zero.
+
+`CASE WHEN` rather than `CAST(pred AS INT)`, for the same reason BOOLEAN is not a column type — and
+it happens to be exactly right, since `CASE WHEN` sends UNKNOWN to `ELSE`, which is the `IS TRUE`
+semantics NoREC asks for.
+
+**Schema comes from the CUBRID catalog**, not `INFORMATION_SCHEMA`:
 
 ```sql
 SELECT class_name FROM db_class WHERE is_system_class = 'NO' AND class_type = 'CLASS';
 SELECT attr_name, data_type, prec FROM db_attribute WHERE class_name = ? ORDER BY def_order;
 ```
 
-`def_order` 정렬이 필요하다 — INSERT 의 컬럼 순서와 맞춰야 한다.
+`def_order` is not decoration — it is what makes generated `INSERT` column lists line up.
 
----
+**The engine runs in its own home.** CUBRID defaults the master port (1523), the broker ports
+(33000, 30000) and the shared-memory ids identically in every install tree. Put two trees on one
+machine and whichever master starts first owns the port; every `cubrid` command from the other tree
+then talks to *someone else's* master. `cubrid server status` shows you a stranger's databases and
+your own quietly disappears. While this repository was being written, six `cub_master` processes from
+six different trees were running on the development machine.
 
-## 알려진 함정 (직접 겪은 것)
-
-| 증상 | 원인 | 대응 |
-|---|---|---|
-| `Syntax error: unexpected ')', expecting '('` | `count` 가 CUBRID 예약어 | 별칭을 `norec_count` 로 |
-| `cubrid server status` 가 남의 DB 를 보여주고 내 DB 가 사라진다 | 다른 CUBRID 설치가 master 포트 1523 을 선점 | `scripts/cubrid-env.sh` 로 격리 |
-| `config error, MASTER_SHM_ID = broker <name> APPL_SERVER_SHM_ID` | MASTER_SHM_ID 가 어떤 APPL_SERVER_SHM_ID 와 같음 | 충분히 떨어뜨린다 (기본 +99) |
-| `cubrid server start` 가 DB 를 못 찾는다 | `CUBRID_DATABASES` 미설정 → createdb 가 cwd 에 별도 databases.txt 생성 | 스크립트가 항상 export |
-| 몇 분 만에 디스크 100% | CUBRID 서버 코어가 10~20GB. 크래시마다 하나씩 | `--core-dump off` (기본) |
-| `--core-dump off` 인데도 코어가 생긴다 | 크래시 후 **cub_master 가 서버를 재기동**하며 자식이 *master 의* limit 을 상속한다 | master 자체를 `ulimit -c 0` 으로 재기동 (스크립트가 자동 처리) |
-| `log/coredump/*.coredump` 가 0바이트 | 크래시 핸들러가 파일은 만들었으나 백트레이스를 쓰지 못했다 | 원인 미상 — CUBRID 측 동작 |
-| `cubrid broker start` / `service start` 가 반환하지 않는다 | 디버그 빌드 특성 | 포트로 기동 확인 (`ss -ltnp`) |
-
-## 현재 상태
-
-| 항목 | 상태 |
+| | default |
 |---|---|
-| provider 등록 (ServiceLoader) | ✅ `sqlancer.Main --help` 에 `cubrid` 노출 |
-| 스키마 조회 / DDL / DML 생성 | ✅ CREATE TABLE · INSERT · UPDATE 동작 |
-| NoREC oracle | ✅ **실행 검증** — 1회 세션에서 14,582 질의 실행, 불일치 0 |
-| TLP (WHERE) oracle | ⚠️ 코드는 있으나 미검증 |
-| 지원 타입 | INTEGER · SMALLINT · BIGINT · DOUBLE · CHAR · VARCHAR · DATE · TIME · DATETIME |
-| 미지원 | NUMERIC · BIT · BLOB/CLOB · ENUM · JSON · SET/컬렉션 · 인덱스 · 뷰 생성 |
-| 멀티스레드 | ❌ 설계상 불가 (§1) |
+| master port (`cubrid_port_id`) | 1723 |
+| broker ports | query_editor 34000, **BROKER1 34001** |
+| `APPL_SERVER_SHM_ID` | 34000, 34001 |
+| `MASTER_SHM_ID` | 34099 — it must differ from every `APPL_SERVER_SHM_ID` |
 
-`CUBRIDErrors` 의 목록은 실행하면서 계속 보강해야 한다. **논리 버그를 감출 수 있는 광범위한 패턴은 넣지 않는다.**
+**Core files are off by default.** A CUBRID server core is 10–20 GB because of the shared memory
+segment, and a crash-inducing workload writes one every few minutes; four of them filled a 228 GB
+root filesystem here. CUBRID writes a symbolised backtrace to `$CUBRID/log/coredump/*.coredump`
+without the core, which is usually what you actually wanted. `--core-dump on` if you need the whole
+thing.
 
-## 미해결 — CUBRID 서버 크래시
+The subtlety: `ulimit -c 0` in your shell is not enough. When the server crashes, `cub_master`
+restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.sh` reads
+`/proc/<pid>/limits` and restarts the master under the limit when it has to.
 
-이 워크로드에서 CUBRID 11.5.0 **디버그 빌드** 서버가 수 분 간격으로 반복 크래시한다
-(`$CUBRID/log/coredump/` 에 크래시마다 파일이 하나씩 생긴다). 다만:
+## Status
 
-- 크래시 시점 세션의 SQL 을 `csql` 로 그대로 재현했을 때는 서버가 죽지 않았다
-- `*.coredump` 스택 파일이 0바이트라 원인을 특정하지 못했다
-- 디버그 빌드의 assertion 인지, 릴리스 빌드에서도 재현되는지 미확인
+| | |
+|---|---|
+| provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
+| schema, DDL, DML | ✅ `CREATE TABLE`, `INSERT`, `UPDATE` |
+| **NoREC oracle** | ✅ verified in a real run — 37,373 queries, 543 q/s, no mismatch yet |
+| TLP (`WHERE`) oracle | ⚠️ wired but never verified |
+| types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
+| types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
+| actions not covered | `CREATE INDEX`, `DELETE`, `CREATE VIEW`, `ALTER TABLE` |
+| concurrency | ❌ single-threaded by construction |
 
-**따라서 아직 CUBRID 버그로 보고할 단계가 아니다.** 결정적 재현 절차를 먼저 확보해야 한다.
+### The open one: the server keeps crashing
+
+Under this workload a CUBRID 11.5.0 **debug build** dies every three to six minutes — six crashes in
+twenty-six minutes, at 18:14:31, 18:19:17, 18:25:35, 18:30:46, 18:34:01 and 18:40:31.
+
+It is not reportable yet, and the reasons are worth being precise about:
+
+- replaying the crashing session's SQL through `csql` did **not** kill the server
+- the `*.coredump` stack files came out **zero bytes**, so there is no backtrace to read — older
+  files in the same tree are 1811 bytes and perfectly readable, so the mechanism does work
+- whether this is a debug-build assertion, and whether a release build survives it, is unknown
+
+`scripts/crash-repro.sh --reduce` exists to close this: it replays a session log, decides whether the
+server died by watching the server pid, and then reduces the sequence — binary search on the prefix,
+then statement-by-statement removal — down to the shortest thing that still crashes.
+
+```bash
+scripts/crash-repro.sh --log logs/cubrid/database0-cur.log --reduce --trials 3
+```
+
+## Layout
+
+```
+cubrid-sqlancer/
+├── pom.xml                          no shade plugin, on purpose
+├── docs/assets/                     banner.svg, architecture.svg
+├── scripts/
+│   ├── bootstrap.sh                 build SQLancer, install it and the JDBC driver
+│   ├── cubrid-env.sh                an isolated CUBRID_HOME with its own ports and shm ids
+│   ├── cubrid-testdb.sh             create / reuse / recreate the test database; core-file policy
+│   └── crash-repro.sh               replay a session log, reduce it to a minimal crash
+└── src/main/java/sqlancer/cubrid/
+    ├── CUBRIDProvider.java          @AutoService entry point; empties the prepared database
+    ├── CUBRIDOptions.java           --oracle, --test-database
+    ├── CUBRIDSchema.java            catalog queries and the type model
+    ├── CUBRIDErrors.java            errors that are expected rather than interesting
+    ├── CUBRIDOracleFactory.java     NOREC, WHERE
+    ├── CUBRIDToStringVisitor.java   CUBRID syntax, including LIMIT offset, count
+    ├── ast/                         9 expression node types
+    └── gen/                         table, insert, update and expression generators
+```
+
+## Pitfalls
+
+Every one of these cost time here.
+
+| What you see | What it is | What to do |
+|---|---|---|
+| `Syntax error: unexpected ')', expecting '('` | `count` is a reserved word | alias it `norec_count` |
+| `cubrid server status` shows databases you did not create, and yours vanishes | another install tree's master owns port 1523 | `scripts/cubrid-env.sh` |
+| `config error, MASTER_SHM_ID = broker <name> APPL_SERVER_SHM_ID` | the master shm id collides with a broker's | keep them apart (default is +99) |
+| `cubrid server start` cannot find a database you just created | `CUBRID_DATABASES` was unset, so `createdb` wrote its own `databases.txt` into the current directory | the scripts always export it |
+| the disk fills in minutes | one 10–20 GB core per crash | `--core-dump off`, the default |
+| cores appear even with `--core-dump off` | `cub_master` restarted the server, and it inherited the master's limit | restart the master under the limit — the script does this |
+| `*.coredump` is zero bytes | the crash handler created the file but wrote no backtrace | unresolved; see Status |
+| `cubrid broker start` never returns | debug-build behaviour | check the port instead: `ss -ltnp` |
+| `cubrid` missing from `--help` | `META-INF/services` was shaded away | do not build a fat jar |
+
+## Relationships
+
+[`cubrid-testkit`](https://github.com/cubrid-systems/cubrid-testkit) carries this repository as a
+submodule. The decision record is `docs/adr/ADR-EXT-003-sqlancer-cubrid.md` there.
+
+For now this is a standalone tool. Integration waits for Phase 2 of testkit, which is where the
+case-format ingestion interface gets defined; the shape it will take is already settled — a
+subprocess and an artifact to ingest, not a library call. Dialect knowledge is shared as *data*, a
+catalog file, rather than as code, because the other tools on this axis (SQLsmith in C++,
+sqllogictest in Rust) cannot share provider code with a Java one.
+
+Mismatch and regression corpora do not go into `cubrid-testcases*`. Those repositories are frozen
+input (testkit NG1).
+
+## Contributing
+
+`main` is the only branch. Changes arrive as a branch and a pull request. When `main` moves, a bot
+opens a pull request against `cubrid-testkit` to advance the submodule pointer.
+
+When you add to `CUBRIDErrors`, prefer the most specific string you can. A broad prefix silences real
+bugs, and the list already carries `Semantic:`, which is about as wide as it should ever get.
