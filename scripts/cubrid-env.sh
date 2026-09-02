@@ -94,7 +94,9 @@ if [ ! -f "$ROOT/.ready" ]; then
   echo "==> 격리 환경 생성: $ROOT (원본: $SOURCE)" >&2
   mkdir -p "$ROOT"
   # 읽기 전용 자산은 링크로 공유 — 디스크와 빌드를 낭비하지 않는다.
-  for d in bin lib msg java jdbc cci include share demo locales compat; do
+  # vm 은 PL 서버가 libjvm 을 찾는 곳이고, timezones 는 타임존 라이브러리다 —
+  # 빠지면 server start 가 "Failed to load libjvm" 로 실패한다.
+  for d in bin lib msg java jdbc cci include share demo locales compat vm timezones 3rdparty; do
     [ -e "$SOURCE/$d" ] && ln -sfn "$SOURCE/$d" "$ROOT/$d"
   done
   # 쓰기가 일어나는 것만 독립
