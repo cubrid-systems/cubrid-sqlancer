@@ -192,8 +192,8 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | TLP `GROUP_BY` | ✅ 177,277 queries, 95% |
 | TLP `DISTINCT` | ✅ 174,309 queries, 96% |
 | oracles not wired | `HAVING`, `AGGREGATE` — an aggregate over grouped rows is not preserved by partitioning the input the way a group key is |
-| types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
-| types not covered | `NUMERIC` `FLOAT` `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
+| types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
+| types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
 | actions not covered | `CREATE VIEW`, `ALTER TABLE` |
 | concurrency | ❌ single-threaded by construction |
 
