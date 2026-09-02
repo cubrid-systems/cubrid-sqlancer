@@ -185,7 +185,7 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 |---|---|
 | engine under test | whatever `$CUBRID` resolves to — `cubrid-env.sh` records the build in `.cubrid-env/.ready` and prints it on every run |
 | provider discovery | ✅ `cubrid` appears in `sqlancer.Main --help` |
-| schema, DDL, DML | ✅ `CREATE TABLE`, `CREATE VIEW`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
+| schema, DDL, DML | ✅ `CREATE TABLE`, `CREATE VIEW`, `ALTER TABLE`, `INSERT`, `UPDATE`, `DELETE`, `CREATE INDEX` |
 | **oracles** | `NOREC`, `WHERE`, `GROUP_BY`, `DISTINCT`, `AGGREGATE`, `HAVING` |
 | NoREC | ✅ 534,789 queries, 91% statement success |
 | TLP `WHERE` | ✅ 718,341 queries, 95% |
@@ -196,7 +196,6 @@ restarts it, and the new process inherits the *master's* limit. `cubrid-testdb.s
 | findings | `docs/findings/` — three wrong results, each with a hand-checked reproduction |
 | types | `INTEGER` `SMALLINT` `BIGINT` `DOUBLE` `FLOAT` `NUMERIC(p,s)` `CHAR` `VARCHAR` `DATE` `TIME` `DATETIME` |
 | types not covered | `BIT` `BLOB` `CLOB` `ENUM` `JSON`, collections |
-| actions not covered | `ALTER TABLE` |
 | unit tests | ✅ 18, on the SQL rendering and the type model — `mvn test` |
 | concurrency | ❌ single-threaded by construction |
 
