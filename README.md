@@ -161,6 +161,8 @@ SELECT attr_name, data_type, prec FROM db_attribute WHERE class_name = ? ORDER B
 | `config error, MASTER_SHM_ID = broker <name> APPL_SERVER_SHM_ID` | MASTER_SHM_ID 가 어떤 APPL_SERVER_SHM_ID 와 같음 | 충분히 떨어뜨린다 (기본 +99) |
 | `cubrid server start` 가 DB 를 못 찾는다 | `CUBRID_DATABASES` 미설정 → createdb 가 cwd 에 별도 databases.txt 생성 | 스크립트가 항상 export |
 | 몇 분 만에 디스크 100% | CUBRID 서버 코어가 10~20GB. 크래시마다 하나씩 | `--core-dump off` (기본) |
+| `--core-dump off` 인데도 코어가 생긴다 | 크래시 후 **cub_master 가 서버를 재기동**하며 자식이 *master 의* limit 을 상속한다 | master 자체를 `ulimit -c 0` 으로 재기동 (스크립트가 자동 처리) |
+| `log/coredump/*.coredump` 가 0바이트 | 크래시 핸들러가 파일은 만들었으나 백트레이스를 쓰지 못했다 | 원인 미상 — CUBRID 측 동작 |
 | `cubrid broker start` / `service start` 가 반환하지 않는다 | 디버그 빌드 특성 | 포트로 기동 확인 (`ss -ltnp`) |
 
 ## 현재 상태
@@ -169,10 +171,21 @@ SELECT attr_name, data_type, prec FROM db_attribute WHERE class_name = ? ORDER B
 |---|---|
 | provider 등록 (ServiceLoader) | ✅ `sqlancer.Main --help` 에 `cubrid` 노출 |
 | 스키마 조회 / DDL / DML 생성 | ✅ CREATE TABLE · INSERT · UPDATE 동작 |
-| NoREC oracle | ✅ 질의 쌍이 csql 에서 동작·일치 확인 |
+| NoREC oracle | ✅ **실행 검증** — 1회 세션에서 14,582 질의 실행, 불일치 0 |
 | TLP (WHERE) oracle | ⚠️ 코드는 있으나 미검증 |
 | 지원 타입 | INTEGER · SMALLINT · BIGINT · DOUBLE · CHAR · VARCHAR · DATE · TIME · DATETIME |
 | 미지원 | NUMERIC · BIT · BLOB/CLOB · ENUM · JSON · SET/컬렉션 · 인덱스 · 뷰 생성 |
 | 멀티스레드 | ❌ 설계상 불가 (§1) |
 
 `CUBRIDErrors` 의 목록은 실행하면서 계속 보강해야 한다. **논리 버그를 감출 수 있는 광범위한 패턴은 넣지 않는다.**
+
+## 미해결 — CUBRID 서버 크래시
+
+이 워크로드에서 CUBRID 11.5.0 **디버그 빌드** 서버가 수 분 간격으로 반복 크래시한다
+(`$CUBRID/log/coredump/` 에 크래시마다 파일이 하나씩 생긴다). 다만:
+
+- 크래시 시점 세션의 SQL 을 `csql` 로 그대로 재현했을 때는 서버가 죽지 않았다
+- `*.coredump` 스택 파일이 0바이트라 원인을 특정하지 못했다
+- 디버그 빌드의 assertion 인지, 릴리스 빌드에서도 재현되는지 미확인
+
+**따라서 아직 CUBRID 버그로 보고할 단계가 아니다.** 결정적 재현 절차를 먼저 확보해야 한다.
