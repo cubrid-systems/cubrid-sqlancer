@@ -92,6 +92,17 @@ public class CUBRIDConstant implements CUBRIDExpression {
         }
     }
 
+    /**
+     * BOOLEAN 자리의 NULL. 맨 {@code NULL} 은 CUBRID 에서 술어가 될 수 없어 — {@code (NULL) OR (1 = 1)} 은 구문 오류다 —
+     * UNKNOWN 을 주는 항등 비교로 쓴다. TRUE/FALSE 와 같은 방식이다.
+     */
+    public static class CUBRIDBooleanUnknownConstant extends CUBRIDConstant {
+        @Override
+        public String toString() {
+            return "(1 = NULL)";
+        }
+    }
+
     private abstract static class CUBRIDTemporalConstant extends CUBRIDConstant {
         protected final String textRepr;
 
@@ -155,6 +166,10 @@ public class CUBRIDConstant implements CUBRIDExpression {
 
     public static CUBRIDExpression createBooleanConstant(boolean val) {
         return new CUBRIDBooleanConstant(val);
+    }
+
+    public static CUBRIDExpression createBooleanUnknownConstant() {
+        return new CUBRIDBooleanUnknownConstant();
     }
 
     public static CUBRIDExpression createDateConstant(long millis) {

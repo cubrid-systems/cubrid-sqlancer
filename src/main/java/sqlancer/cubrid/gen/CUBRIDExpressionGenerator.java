@@ -110,6 +110,16 @@ public final class CUBRIDExpressionGenerator
         return generateLeafNode(type);
     }
 
+    /**
+     * NULL 은 자리에 따라 표기가 다르다. BOOLEAN 자리는 술어이므로 맨 {@code NULL} 을 쓸 수 없고 UNKNOWN 을 주는 항등 비교로 쓴다.
+     */
+    private static CUBRIDExpression nullConstantFor(CUBRIDCompositeDataType type) {
+        if (type.getType() == CUBRIDDataType.BOOLEAN) {
+            return CUBRIDConstant.createBooleanUnknownConstant();
+        }
+        return CUBRIDConstant.createNullConstant();
+    }
+
     private static boolean isNumeric(CUBRIDDataType t) {
         switch (t) {
         case INTEGER:
@@ -125,12 +135,12 @@ public final class CUBRIDExpressionGenerator
     @Override
     public CUBRIDExpression generateConstant(CUBRIDCompositeDataType type) {
         if (Randomly.getBooleanWithSmallProbability()) {
-            return CUBRIDConstant.createNullConstant();
+            return nullConstantFor(type);
         }
         Randomly r = globalState.getRandomly();
         switch (type.getType()) {
         case NULL:
-            return CUBRIDConstant.createNullConstant();
+            return nullConstantFor(type);
         case BOOLEAN:
             // CUBRID 에 TRUE/FALSE 리터럴을 신뢰할 수 없으므로 항등 비교로 만든다.
             return CUBRIDConstant.createBooleanConstant(Randomly.getBoolean());
